@@ -423,13 +423,29 @@ class ApiService {
     const headers = this.getHeaders(baseUrl, token);
     headers['x-target-path'] = '/api/v1/expense';
     
-    // We specify multipart/form-data. The proxy route parses and forwards it.
-    // Fetch needs to set boundaries, so we pass FormData body and omit 'content-type' in headers
+    // Format purchase date cleanly (YYYY-MM-DD)
+    let formattedDate = purchaseDate;
+    if (purchaseDate) {
+      const parsedDate = new Date(purchaseDate);
+      if (!isNaN(parsedDate.getTime())) {
+        const yyyy = parsedDate.getFullYear();
+        const mm = String(parsedDate.getMonth() + 1).padStart(2, '0');
+        const dd = String(parsedDate.getDate()).padStart(2, '0');
+        formattedDate = `${yyyy}-${mm}-${dd}`;
+      }
+    }
+
     const formData = new FormData();
     formData.append('item_name', itemName);
     formData.append('price', price.toString());
-    formData.append('purchase_date', purchaseDate);
-    formData.append('purchase_from', purchasedFrom);
+    formData.append('purchase_date', formattedDate);
+    
+    if (purchasedFrom) {
+      formData.append('purchase_from', purchasedFrom);
+      formData.append('purchased_from', purchasedFrom);
+    } else {
+      formData.append('purchase_from', '');
+    }
 
     const currencyMeta = this.currencyMetadata[currencyCode.toUpperCase()] || {};
     const finalCurrencyId = currencyMeta.id || (currencyCode.toUpperCase() === 'USD' ? 37 : 40);
@@ -439,7 +455,9 @@ class ApiService {
     formData.append('currency_code', currencyCode);
     formData.append('status', 'pending');
     formData.append('description', 'Expense submitted via mobile web app');
+    formData.append('user_id', userId);
     formData.append('user[id]', userId);
+    formData.append('currency_id', finalCurrencyId.toString());
     formData.append('currency[id]', finalCurrencyId.toString());
 
     if (category) {
@@ -452,7 +470,15 @@ class ApiService {
 
     if (customFieldsData) {
       Object.entries(customFieldsData).forEach(([key, value]) => {
-        formData.append(`custom_fields_data[${key}]`, value as any);
+        if (value !== undefined && value !== null) {
+          // Append raw numeric field ID format (e.g. custom_fields_data[12])
+          const rawId = key.replace(/^field_/, '');
+          formData.append(`custom_fields_data[${rawId}]`, value as any);
+          // Also append prefixed format (e.g. custom_fields_data[field_12]) for fallback
+          if (rawId !== key) {
+            formData.append(`custom_fields_data[${key}]`, value as any);
+          }
+        }
       });
     }
 

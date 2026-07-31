@@ -230,6 +230,20 @@ export default function ExpensesView({ session, onBackToDashboard }: ExpensesVie
     }
   };
 
+  const ensureISODate = (val: string): string => {
+    if (!val) return '';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(val)) return val;
+    const parsed = new Date(val);
+    if (!isNaN(parsed.getTime())) {
+      const yyyy = parsed.getFullYear();
+      const mm = String(parsed.getMonth() + 1).padStart(2, '0');
+      const dd = String(parsed.getDate()).padStart(2, '0');
+      return `${yyyy}-${mm}-${dd}`;
+    }
+    return val;
+  };
+
+
   const getCurrencySymbol = (exp: ExpenseRecord) => {
     // If currency id is present, query metadata
     if (exp.currency?.id) {
@@ -310,7 +324,7 @@ export default function ExpensesView({ session, onBackToDashboard }: ExpensesVie
       ) : showApplyForm ? (
         
         /* New Expense Form Layout */
-        <form onSubmit={handleApplySubmit} className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-100 dark:border-slate-800/60 shadow-sm flex flex-col gap-5">
+        <form noValidate onSubmit={handleApplySubmit} className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-100 dark:border-slate-800/60 shadow-sm flex flex-col gap-5">
           
           {/* Item Name input */}
           <div className="flex flex-col gap-2">
@@ -387,7 +401,7 @@ export default function ExpensesView({ session, onBackToDashboard }: ExpensesVie
             <input
               type="date"
               required
-              value={purchaseDate}
+              value={ensureISODate(purchaseDate)}
               onChange={(e) => setPurchaseDate(e.target.value)}
               className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent dark:text-slate-200"
             />
@@ -487,7 +501,7 @@ export default function ExpensesView({ session, onBackToDashboard }: ExpensesVie
                   <input
                     type="date"
                     required={isRequired}
-                    value={customFieldsValues[fieldKey] || ''}
+                    value={ensureISODate(customFieldsValues[fieldKey] || '')}
                     onChange={(e) => setCustomFieldsValues({ ...customFieldsValues, [fieldKey]: e.target.value })}
                     className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent dark:text-slate-200"
                   />
