@@ -206,10 +206,65 @@ export default function ExpensesView({ session, onBackToDashboard }: ExpensesVie
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const compressImageIfNeeded = async (file: File): Promise<File> => {
+    if (!file || !file.type.startsWith('image/')) return file;
+    if (file.size <= 1.5 * 1024 * 1024) return file;
+
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          const maxDim = 1600;
+
+          if (width > maxDim || height > maxDim) {
+            if (width > height) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            } else {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return resolve(file);
+
+          ctx.drawImage(img, 0, 0, width, height);
+          canvas.toBlob(
+            (blob) => {
+              if (blob) {
+                const compressedFile = new File([blob], file.name.replace(/\.[^/.]+$/, '.jpg'), {
+                  type: 'image/jpeg',
+                  lastModified: Date.now(),
+                });
+                resolve(compressedFile);
+              } else {
+                resolve(file);
+              }
+            },
+            'image/jpeg',
+            0.8
+          );
+        };
+        img.onerror = () => resolve(file);
+        img.src = e.target?.result as string;
+      };
+      reader.onerror = () => resolve(file);
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files.length > 0) {
-      setReceiptFile(files[0]);
+      const processed = await compressImageIfNeeded(files[0]);
+      setReceiptFile(processed);
     }
   };
 
@@ -512,10 +567,11 @@ export default function ExpensesView({ session, onBackToDashboard }: ExpensesVie
                       id={`file-${field.id}`}
                       accept="image/*,application/pdf"
                       className="hidden"
-                      onChange={(e) => {
+                      onChange={async (e) => {
                         const file = e.target.files?.[0];
                         if (file) {
-                          setCustomFieldsValues({ ...customFieldsValues, [fieldKey]: file });
+                          const processed = await compressImageIfNeeded(file);
+                          setCustomFieldsValues({ ...customFieldsValues, [fieldKey]: processed });
                         }
                       }}
                     />

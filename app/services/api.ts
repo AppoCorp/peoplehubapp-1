@@ -93,13 +93,31 @@ class ApiService {
   }
 
   private static async handleResponse(response: Response) {
-    const body = await response.json();
+    const text = await response.text();
+    let body: any;
+    try {
+      body = JSON.parse(text);
+    } catch {
+      if (!response.ok) {
+        if (text.includes('Request Entity Too Large') || response.status === 413) {
+          throw new Error('The attached file/image is too large for the server. Please choose a smaller image (under 3MB).');
+        }
+        throw new Error(`Server Error (${response.status}): ${text.substring(0, 120) || 'Invalid server response'}`);
+      }
+      body = text;
+    }
     
     if (!response.ok) {
-      let errorMessage = body.message || 'Request failed';
+      let errorMessage = typeof body === 'string' 
+        ? body 
+        : (body?.message || body?.error || 'Request failed');
       
+      if (typeof body === 'string' && body.includes('Request Entity Too Large')) {
+        errorMessage = 'The attached file/image is too large for the server. Please choose a smaller image (under 3MB).';
+      }
+
       // Decode validation details if available from php backend
-      if (body.error && body.error.details) {
+      if (body && typeof body === 'object' && body.error && body.error.details) {
         const details = body.error.details;
         const validationErrors: string[] = [];
         Object.entries(details).forEach(([key, value]) => {
@@ -116,11 +134,11 @@ class ApiService {
       throw new Error(errorMessage);
     }
 
-    if (body && (body.status === 'fail' || body.status === 'error')) {
+    if (body && typeof body === 'object' && (body.status === 'fail' || body.status === 'error')) {
       throw new Error(body.message || 'Action failed');
     }
 
-    return body.hasOwnProperty('data') ? body.data : body;
+    return body && typeof body === 'object' && body.hasOwnProperty('data') ? body.data : body;
   }
 
   public static getCurrencySymbolById(id: any): string {
@@ -471,12 +489,15 @@ class ApiService {
     if (customFieldsData) {
       Object.entries(customFieldsData).forEach(([key, value]) => {
         if (value !== undefined && value !== null) {
-          // Append raw numeric field ID format (e.g. custom_fields_data[12])
           const rawId = key.replace(/^field_/, '');
-          formData.append(`custom_fields_data[${rawId}]`, value as any);
-          // Also append prefixed format (e.g. custom_fields_data[field_12]) for fallback
-          if (rawId !== key) {
-            formData.append(`custom_fields_data[${key}]`, value as any);
+          if (value instanceof File) {
+            // For File objects, append only once to avoid duplicating large file uploads
+            formData.append(`custom_fields_data[${rawId}]`, value, value.name);
+          } else {
+            formData.append(`custom_fields_data[${rawId}]`, value as any);
+            if (rawId !== key) {
+              formData.append(`custom_fields_data[${key}]`, value as any);
+            }
           }
         }
       });
