@@ -182,7 +182,11 @@ export default function DashboardView({ session, onNavigateToTab }: DashboardVie
       setLatitude(latStr);
       setLongitude(lngStr);
     } catch (err: any) {
-      console.warn('Clock-in proceeding without location:', err);
+      console.error('Clock-in rejected:', err);
+      showNotification(err.message || 'Location coordinates are required for clock-in', 'error');
+      setIsLocationLoading(false);
+      setIsSubmitting(false);
+      return;
     } finally {
       setIsLocationLoading(false);
     }
@@ -216,7 +220,11 @@ export default function DashboardView({ session, onNavigateToTab }: DashboardVie
       setLatitude(latStr);
       setLongitude(lngStr);
     } catch (err: any) {
-      console.warn('Clock-out proceeding without location:', err);
+      console.error('Clock-out rejected:', err);
+      showNotification(err.message || 'Location coordinates are required for clock-out', 'error');
+      setIsLocationLoading(false);
+      setIsSubmitting(false);
+      return;
     } finally {
       setIsLocationLoading(false);
     }
