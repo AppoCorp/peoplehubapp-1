@@ -206,9 +206,19 @@ export default function ExpensesView({ session, onBackToDashboard }: ExpensesVie
     }
   };
 
+  const isHeicFile = (file: File): boolean => {
+    const type = file.type.toLowerCase();
+    const name = file.name.toLowerCase();
+    return type === 'image/heic' || type === 'image/heif' || name.endsWith('.heic') || name.endsWith('.heif');
+  };
+
   const compressImageIfNeeded = async (file: File): Promise<File> => {
-    if (!file || !file.type.startsWith('image/')) return file;
-    if (file.size <= 1.5 * 1024 * 1024) return file;
+    if (!file) return file;
+    const isHeic = isHeicFile(file);
+    if (!isHeic && !file.type.startsWith('image/')) return file;
+    // HEIC/HEIF must always be converted to JPEG (unviewable in most browsers used by approvers),
+    // even when small enough to skip the usual size-based compression.
+    if (!isHeic && file.size <= 1.5 * 1024 * 1024) return file;
 
     return new Promise((resolve) => {
       const reader = new FileReader();
