@@ -10,7 +10,7 @@ interface LoginViewProps {
 }
 
 export default function LoginView({ onLoginSuccess, loginFn }: LoginViewProps) {
-  const [url, setUrl] = useState('peoplehub.co.in');
+  const [url, setUrl] = useState('appo.co.in');
   const [showServerUrl, setShowServerUrl] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
