@@ -112,34 +112,8 @@ export default function DashboardView({ session, onNavigateToTab }: DashboardVie
   };
 
   // Geolocation wrapper
-  const describeGeolocationError = (
-    err: GeolocationPositionError,
-    permissionState?: PermissionState
-  ): string => {
-    // If the error code itself is PERMISSION_DENIED, it is always a permission issue
-    if (err.code === err.PERMISSION_DENIED) {
-      return 'Your device location is ON, but location permission for the app is disabled. Go to your device settings and allow location access for the app.';
-    }
-
-    if (permissionState === 'granted') {
-      return 'Location permission for the app is ON, but your device location services are OFF. Turn ON location services on your device.';
-    }
-
-    if (permissionState === 'denied') {
-      return 'Location services are OFF for both your device and app. Turn ON location services on your device and allow location access for the app.';
-    }
-
-    // Fallback
-    switch (err.code) {
-      case err.PERMISSION_DENIED:
-        return 'Your device location is ON, but location permission for the app is disabled. Go to your device settings and allow location access for the app.';
-      case err.POSITION_UNAVAILABLE:
-        return 'Location services are OFF for both your device and app. Turn ON location services on your device and allow location access for the app.';
-      case err.TIMEOUT:
-        return 'Location permission for the app is ON, but your device location services are OFF. Turn ON location services on your device.';
-      default:
-        return err.message || 'Unable to retrieve your location.';
-    }
+  const describeGeolocationError = (err: GeolocationPositionError): string => {
+    return "We couldn't determine your location. Please check your location settings and Appo's location permission, then try again.";
   };
 
   const getCoordinates = (): Promise<GeolocationPosition> => {
@@ -148,80 +122,11 @@ export default function DashboardView({ session, onNavigateToTab }: DashboardVie
         reject(new Error('Geolocation is not supported by your browser'));
         return;
       }
-
-      // Check if running inside the Flutter app shell (with JavaScript bridge)
-      if (typeof window !== 'undefined' && (window as any).FlutterBridge) {
-        let fallbackTriggered = false;
-
-        // Fallback to standard geolocation if native bridge doesn't respond in 1.5s (older app versions)
-        const bridgeTimeout = setTimeout(() => {
-          if (!fallbackTriggered) {
-            fallbackTriggered = true;
-            delete (window as any).onLocationStatusResponse;
-            console.log('Native bridge check timed out. Falling back to standard geolocation.');
-            navigator.geolocation.getCurrentPosition(
-              resolve,
-              (err) => {
-                reject(new Error(describeGeolocationError(err)));
-              },
-              {
-                enableHighAccuracy: true,
-                timeout: 10000,
-                maximumAge: 0
-              }
-            );
-          }
-        }, 1500);
-
-        // Define callback for native location status response
-        (window as any).onLocationStatusResponse = (gpsEnabled: boolean, appPermissionGranted: boolean) => {
-          if (fallbackTriggered) return;
-          fallbackTriggered = true;
-          clearTimeout(bridgeTimeout);
-          delete (window as any).onLocationStatusResponse;
-
-          if (!appPermissionGranted && !gpsEnabled) {
-            reject(new Error('Location services are OFF for both your device and app. Turn ON location services on your device and allow location access for the app.'));
-          } else if (!appPermissionGranted && gpsEnabled) {
-            reject(new Error('Your device location is ON, but location permission for the app is disabled. Go to your device settings and allow location access for the app.'));
-          } else if (appPermissionGranted && !gpsEnabled) {
-            reject(new Error('Location permission for the app is ON, but your device location services are OFF. Turn ON location services on your device.'));
-          } else {
-            // Both app permission and GPS are ON natively. Trigger actual location lookup.
-            navigator.geolocation.getCurrentPosition(
-              resolve,
-              (err) => {
-                reject(new Error(describeGeolocationError(err)));
-              },
-              {
-                enableHighAccuracy: true,
-                timeout: 10000,
-                maximumAge: 0
-              }
-            );
-          }
-        };
-
-        // Send query to the native Flutter shell
-        (window as any).FlutterBridge.postMessage('checkLocationStatus');
-        return;
-      }
-
-      // Standard web browser fallback
       navigator.geolocation.getCurrentPosition(
         resolve,
-        async (err) => {
+        (err) => {
           console.error('Geolocation error:', { code: err.code, message: err.message });
-          try {
-            if (navigator.permissions && navigator.permissions.query) {
-              const permissionStatus = await navigator.permissions.query({ name: 'geolocation' });
-              reject(new Error(describeGeolocationError(err, permissionStatus.state)));
-            } else {
-              reject(new Error(describeGeolocationError(err)));
-            }
-          } catch {
-            reject(new Error(describeGeolocationError(err)));
-          }
+          reject(new Error(describeGeolocationError(err)));
         },
         {
           enableHighAccuracy: true,
