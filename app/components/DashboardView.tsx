@@ -112,14 +112,29 @@ export default function DashboardView({ session, onNavigateToTab }: DashboardVie
   };
 
   // Geolocation wrapper
-  const describeGeolocationError = (err: GeolocationPositionError): string => {
+  const describeGeolocationError = (
+    err: GeolocationPositionError,
+    permissionState?: PermissionState
+  ): string => {
+    if (permissionState === 'granted') {
+      return 'Location permission for the app is ON, but your device location services are OFF. Turn ON location services on your device.';
+    }
+
+    if (permissionState === 'denied') {
+      if (err.code === err.PERMISSION_DENIED) {
+        return 'Your device location is ON, but location permission for the app is disabled. Go to your device settings and allow location access for the app.';
+      }
+      return 'Location services are OFF for both your device and app. Turn ON location services on your device and allow location access for the app.';
+    }
+
+    // Fallback
     switch (err.code) {
       case err.PERMISSION_DENIED:
-        return 'Location permission was denied. If you are using the mobile app, enable Location access for it in your phone Settings and try again.';
+        return 'Your device location is ON, but location permission for the app is disabled. Go to your device settings and allow location access for the app.';
       case err.POSITION_UNAVAILABLE:
-        return 'Your location could not be determined. Please check that Location/GPS is turned on.';
+        return 'Location services are OFF for both your device and app. Turn ON location services on your device and allow location access for the app.';
       case err.TIMEOUT:
-        return 'Getting your location took too long. Please try again.';
+        return 'Location permission for the app is ON, but your device location services are OFF. Turn ON location services on your device.';
       default:
         return err.message || 'Unable to retrieve your location.';
     }
@@ -133,9 +148,18 @@ export default function DashboardView({ session, onNavigateToTab }: DashboardVie
       }
       navigator.geolocation.getCurrentPosition(
         resolve,
-        (err) => {
+        async (err) => {
           console.error('Geolocation error:', { code: err.code, message: err.message });
-          reject(new Error(describeGeolocationError(err)));
+          try {
+            if (navigator.permissions && navigator.permissions.query) {
+              const permissionStatus = await navigator.permissions.query({ name: 'geolocation' });
+              reject(new Error(describeGeolocationError(err, permissionStatus.state)));
+            } else {
+              reject(new Error(describeGeolocationError(err)));
+            }
+          } catch {
+            reject(new Error(describeGeolocationError(err)));
+          }
         },
         {
           enableHighAccuracy: true,
