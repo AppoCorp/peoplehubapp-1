@@ -151,9 +151,33 @@ export default function DashboardView({ session, onNavigateToTab }: DashboardVie
 
       // Check if running inside the Flutter app shell (with JavaScript bridge)
       if (typeof window !== 'undefined' && (window as any).FlutterBridge) {
+        let fallbackTriggered = false;
+
+        // Fallback to standard geolocation if native bridge doesn't respond in 1.5s (older app versions)
+        const bridgeTimeout = setTimeout(() => {
+          if (!fallbackTriggered) {
+            fallbackTriggered = true;
+            delete (window as any).onLocationStatusResponse;
+            console.log('Native bridge check timed out. Falling back to standard geolocation.');
+            navigator.geolocation.getCurrentPosition(
+              resolve,
+              (err) => {
+                reject(new Error(describeGeolocationError(err)));
+              },
+              {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 0
+              }
+            );
+          }
+        }, 1500);
+
         // Define callback for native location status response
         (window as any).onLocationStatusResponse = (gpsEnabled: boolean, appPermissionGranted: boolean) => {
-          // Clean up callback after execution
+          if (fallbackTriggered) return;
+          fallbackTriggered = true;
+          clearTimeout(bridgeTimeout);
           delete (window as any).onLocationStatusResponse;
 
           if (!appPermissionGranted && !gpsEnabled) {
