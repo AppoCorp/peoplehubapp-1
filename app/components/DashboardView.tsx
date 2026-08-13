@@ -148,6 +148,42 @@ export default function DashboardView({ session, onNavigateToTab }: DashboardVie
         reject(new Error('Geolocation is not supported by your browser'));
         return;
       }
+
+      // Check if running inside the Flutter app shell (with JavaScript bridge)
+      if (typeof window !== 'undefined' && (window as any).FlutterBridge) {
+        // Define callback for native location status response
+        (window as any).onLocationStatusResponse = (gpsEnabled: boolean, appPermissionGranted: boolean) => {
+          // Clean up callback after execution
+          delete (window as any).onLocationStatusResponse;
+
+          if (!appPermissionGranted && !gpsEnabled) {
+            reject(new Error('Location services are OFF for both your device and app. Turn ON location services on your device and allow location access for the app.'));
+          } else if (!appPermissionGranted && gpsEnabled) {
+            reject(new Error('Your device location is ON, but location permission for the app is disabled. Go to your device settings and allow location access for the app.'));
+          } else if (appPermissionGranted && !gpsEnabled) {
+            reject(new Error('Location permission for the app is ON, but your device location services are OFF. Turn ON location services on your device.'));
+          } else {
+            // Both app permission and GPS are ON natively. Trigger actual location lookup.
+            navigator.geolocation.getCurrentPosition(
+              resolve,
+              (err) => {
+                reject(new Error(describeGeolocationError(err)));
+              },
+              {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 0
+              }
+            );
+          }
+        };
+
+        // Send query to the native Flutter shell
+        (window as any).FlutterBridge.postMessage('checkLocationStatus');
+        return;
+      }
+
+      // Standard web browser fallback
       navigator.geolocation.getCurrentPosition(
         resolve,
         async (err) => {
