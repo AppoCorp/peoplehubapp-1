@@ -116,14 +116,16 @@ export default function DashboardView({ session, onNavigateToTab }: DashboardVie
     err: GeolocationPositionError,
     permissionState?: PermissionState
   ): string => {
+    // If the error code itself is PERMISSION_DENIED, it is always a permission issue
+    if (err.code === err.PERMISSION_DENIED) {
+      return 'Your device location is ON, but location permission for the app is disabled. Go to your device settings and allow location access for the app.';
+    }
+
     if (permissionState === 'granted') {
       return 'Location permission for the app is ON, but your device location services are OFF. Turn ON location services on your device.';
     }
 
     if (permissionState === 'denied') {
-      if (err.code === err.PERMISSION_DENIED) {
-        return 'Your device location is ON, but location permission for the app is disabled. Go to your device settings and allow location access for the app.';
-      }
       return 'Location services are OFF for both your device and app. Turn ON location services on your device and allow location access for the app.';
     }
 
