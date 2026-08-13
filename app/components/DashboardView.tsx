@@ -12,7 +12,9 @@ import {
   Loader2,
   CheckCircle,
   HelpCircle,
-  AlertCircle
+  AlertCircle,
+  X,
+  Info
 } from 'lucide-react';
 import { UserSession } from '../services/api';
 import ApiService, { AttendanceRecord } from '../services/api';
@@ -34,6 +36,7 @@ export default function DashboardView({ session, onNavigateToTab }: DashboardVie
   const [latitude, setLatitude] = useState<string | null>(null);
   const [longitude, setLongitude] = useState<string | null>(null);
   const [notification, setNotification] = useState<{ text: string; type: 'success' | 'error' | 'warning' } | null>(null);
+  const [showInfoModal, setShowInfoModal] = useState(false);
 
   // Time ticker
   useEffect(() => {
@@ -106,9 +109,15 @@ export default function DashboardView({ session, onNavigateToTab }: DashboardVie
 
   const showNotification = (text: string, type: 'success' | 'error' | 'warning') => {
     setNotification({ text, type });
-    setTimeout(() => {
-      setNotification(null);
-    }, 4000);
+    if (type === 'success') {
+      setTimeout(() => {
+        setNotification(null);
+      }, 4000);
+    }
+  };
+
+  const closeNotification = () => {
+    setNotification(null);
   };
 
   // Geolocation wrapper
@@ -279,13 +288,102 @@ export default function DashboardView({ session, onNavigateToTab }: DashboardVie
 
       {/* Dynamic Notifications Banner */}
       {notification && (
-        <div className={`fixed top-4 right-4 z-50 flex items-center gap-2.5 px-4 py-3 rounded-2xl shadow-lg border text-sm font-semibold transition-all duration-300 animate-in fade-in slide-in-from-top-4 ${
+        <div className={`fixed top-4 right-4 left-4 md:left-auto md:w-96 z-50 flex flex-col gap-2 p-4 rounded-2xl shadow-xl border transition-all duration-300 animate-in fade-in slide-in-from-top-4 ${
           notification.type === 'success' 
             ? 'bg-emerald-50 border-emerald-100 text-emerald-700 dark:bg-emerald-950/20 dark:border-emerald-900/50 dark:text-emerald-400'
             : 'bg-rose-50 border-rose-100 text-rose-700 dark:bg-rose-950/20 dark:border-rose-900/50 dark:text-rose-400'
         }`}>
-          {notification.type === 'success' ? <CheckCircle className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
-          <span>{notification.text}</span>
+          <div className="flex items-start gap-2.5">
+            {notification.type === 'success' ? (
+              <CheckCircle className="w-5 h-5 shrink-0 mt-0.5" />
+            ) : (
+              <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+            )}
+            <div className="flex-1 text-sm font-semibold leading-relaxed">
+              {notification.text}
+            </div>
+            
+            {notification.type === 'success' && (
+              <button 
+                onClick={closeNotification}
+                className="p-1 rounded-lg hover:bg-emerald-100/50 dark:hover:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+
+          {notification.type === 'error' && (
+            <div className="flex justify-end gap-2 mt-2 pt-2 border-t border-rose-100/50 dark:border-rose-900/30">
+              <button
+                onClick={() => setShowInfoModal(true)}
+                title="Location Help"
+                className="p-1.5 rounded-lg bg-rose-100/60 hover:bg-rose-100 dark:bg-rose-900/40 dark:hover:bg-rose-900/60 text-rose-800 dark:text-rose-350 transition-all cursor-pointer flex items-center justify-center"
+              >
+                <HelpCircle className="w-4 h-4" />
+              </button>
+              <button 
+                onClick={closeNotification}
+                title="Dismiss"
+                className="p-1.5 rounded-lg bg-rose-100/60 hover:bg-rose-100 dark:bg-rose-900/40 dark:hover:bg-rose-900/60 text-rose-800 dark:text-rose-350 transition-all cursor-pointer flex items-center justify-center"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Geolocation Guide Modal */}
+      {showInfoModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 max-w-md w-full shadow-xl border border-slate-100 dark:border-slate-800 animate-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center pb-4 border-b border-slate-100 dark:border-slate-800">
+              <h3 className="text-base font-extrabold text-slate-850 dark:text-slate-100 flex items-center gap-2 uppercase tracking-wide">
+                <Info className="w-5 h-5 text-indigo-500" />
+                Location Guide
+              </h3>
+              <button 
+                onClick={() => setShowInfoModal(false)}
+                className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 dark:text-slate-500 hover:text-slate-650 dark:hover:text-slate-350 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="mt-4 flex flex-col gap-4 text-xs text-slate-600 dark:text-slate-300">
+              <div>
+                <h4 className="font-extrabold text-slate-800 dark:text-slate-200 mb-1">
+                  1. Switch On Device Location
+                </h4>
+                <p className="leading-relaxed">
+                  Swipe down from the top of your screen to open the Quick Settings panel, and verify that the <strong>Location/GPS</strong> toggle is ON.
+                </p>
+              </div>
+
+              <div>
+                <h4 className="font-extrabold text-slate-800 dark:text-slate-200 mb-1">
+                  2. Enable App Location Permission
+                </h4>
+                <p className="leading-relaxed">
+                  Go to your phone's <strong>Settings &gt; Apps &gt; Appo (or PeopleHub/AppoLMS) &gt; Permissions</strong>, select <strong>Location</strong>, and choose <strong>"Allow only while using the app"</strong>.
+                </p>
+              </div>
+
+              <div className="p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/40 rounded-xl text-amber-800 dark:text-amber-300 leading-relaxed">
+                <strong>💡 Still facing issues?</strong> Consider closing the app completely (swipe it away from your recent/background apps history) and opening it again fresh to make the new permissions effective.
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end">
+              <button
+                onClick={() => setShowInfoModal(false)}
+                className="px-5 py-2.5 bg-slate-850 hover:bg-slate-900 dark:bg-slate-800 dark:hover:bg-slate-700 text-white font-extrabold rounded-xl text-xs transition-colors cursor-pointer"
+              >
+                GOT IT
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
