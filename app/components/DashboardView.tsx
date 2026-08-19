@@ -122,7 +122,7 @@ export default function DashboardView({ session, onNavigateToTab }: DashboardVie
 
   // Geolocation wrapper
   const describeGeolocationError = (err: GeolocationPositionError): string => {
-    return "We couldn't determine your location. Please check your location settings and Appo's location permission, then try again.";
+    return "We couldn't access your location. Please ensure GPS services are enabled on your device and that the app has permission to access location. Once done, please try again.";
   };
 
   const getCoordinates = (): Promise<GeolocationPosition> => {
@@ -354,24 +354,24 @@ export default function DashboardView({ session, onNavigateToTab }: DashboardVie
             <div className="mt-4 flex flex-col gap-4 text-xs text-slate-600 dark:text-slate-300">
               <div>
                 <h4 className="font-extrabold text-slate-800 dark:text-slate-200 mb-1">
-                  1. Switch On Device Location
+                  Switch On Device Location
                 </h4>
                 <p className="leading-relaxed">
-                  Swipe down from the top of your screen to open the Quick Settings panel, and verify that the <strong>Location/GPS</strong> toggle is ON.
+                  Swipe down from the top of your screen to open the Quick Settings panel, and verify that Location/GPS is turned on.
                 </p>
               </div>
 
               <div>
                 <h4 className="font-extrabold text-slate-800 dark:text-slate-200 mb-1">
-                  2. Enable App Location Permission
+                  Enable App Location Permission
                 </h4>
                 <p className="leading-relaxed">
-                  Go to your phone's <strong>Settings &gt; Apps &gt; Appo (or PeopleHub/AppoLMS) &gt; Permissions</strong>, select <strong>Location</strong>, and choose <strong>"Allow only while using the app"</strong>.
+                  Go to your phone’s <strong>Settings &gt; Apps &gt; PeopleHub &gt; Permissions</strong>, select <strong>Location</strong>, and choose <strong>Allow only while using the app</strong>.
                 </p>
               </div>
 
               <div className="p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/40 rounded-xl text-amber-800 dark:text-amber-300 leading-relaxed">
-                <strong>💡 Still facing issues?</strong> Consider closing the app completely (swipe it away from your recent/background apps history) and opening it again fresh to make the new permissions effective.
+                <strong>💡 Still facing issues?</strong> Consider closing the app completely and opening it again for the changes to take effect.
               </div>
             </div>
 
