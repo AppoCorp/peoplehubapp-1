@@ -122,7 +122,7 @@ export default function DashboardView({ session, onNavigateToTab }: DashboardVie
 
   // Geolocation wrapper
   const describeGeolocationError = (err: GeolocationPositionError): string => {
-    return "We couldn't access your location. Please ensure GPS services are enabled on your device and that the app has permission to access location. Once done, please try again.";
+    return "We couldn't access your location.\n\nPlease ensure GPS services are enabled on your device and that the app has permission to access location. Once done, please try again.";
   };
 
   const getCoordinates = (): Promise<GeolocationPosition> => {
@@ -299,7 +299,7 @@ export default function DashboardView({ session, onNavigateToTab }: DashboardVie
             ) : (
               <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
             )}
-            <div className="flex-1 text-sm font-semibold leading-relaxed">
+            <div className="flex-1 text-sm font-semibold leading-relaxed whitespace-pre-wrap">
               {notification.text}
             </div>
             
