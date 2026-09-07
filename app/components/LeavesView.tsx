@@ -145,11 +145,6 @@ export default function LeavesView({ session, onBackToDashboard }: LeavesViewPro
       let taken = parseFloat(type.used_leaves || '0') || 0;
 
       let monthlyLimit = parseFloat(type.monthly_limit || '0');
-      
-      // Local Override: Force Sick Leave to 2 days per month if backend doesn't send it
-      if (type.type_name?.toLowerCase().includes('sick') && monthlyLimit === 0) {
-        monthlyLimit = 2;
-      }
 
       if (monthlyLimit > 0) {
         quota = monthlyLimit;
