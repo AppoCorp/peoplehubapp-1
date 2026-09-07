@@ -296,9 +296,10 @@ class ApiService {
     return this.handleResponse(response);
   }
 
-  public static async getLeaves(baseUrl: string, token: string): Promise<LeaveRecord[]> {
+  public static async getLeaves(baseUrl: string, token: string, userId?: string): Promise<LeaveRecord[]> {
     const headers = this.getHeaders(baseUrl, token);
-    headers['x-target-path'] = '/api/v1/leave?limit=200';
+    const filter = userId ? `&filters=user_id eq ${userId}` : '';
+    headers['x-target-path'] = `/api/v1/leave?limit=200${filter}`;
 
     const response = await fetch('/api/proxy', {
       method: 'GET',
@@ -363,9 +364,10 @@ class ApiService {
     return this.handleResponse(response);
   }
 
-  public static async getExpenses(baseUrl: string, token: string): Promise<ExpenseRecord[]> {
+  public static async getExpenses(baseUrl: string, token: string, userId?: string): Promise<ExpenseRecord[]> {
     const headers = this.getHeaders(baseUrl, token);
-    headers['x-target-path'] = '/api/v1/expense?limit=100&fields=id,item_name,purchase_date,price,status,currency,custom_fields,custom_fields_data';
+    const filter = userId ? `&filters=user_id eq ${userId}` : '';
+    headers['x-target-path'] = `/api/v1/expense?limit=100&fields=id,item_name,purchase_date,price,status,currency,custom_fields,custom_fields_data${filter}`;
 
     const response = await fetch('/api/proxy', {
       method: 'GET',

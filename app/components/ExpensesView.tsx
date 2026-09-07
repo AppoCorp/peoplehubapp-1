@@ -58,7 +58,7 @@ export default function ExpensesView({ session, onBackToDashboard }: ExpensesVie
 
       let expensesList: ExpenseRecord[] = [];
       try {
-        expensesList = await ApiService.getExpenses(session.baseUrl, session.token);
+        expensesList = await ApiService.getExpenses(session.baseUrl, session.token, session.userId);
       } catch (e: any) {
         console.error('Failed to load expenses list:', e);
         setErrorMsg(e.message || 'Failed to load expenses history');

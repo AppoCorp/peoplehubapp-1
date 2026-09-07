@@ -36,7 +36,7 @@ export function useBackgroundSync(session: UserSession | null, isAuthenticated: 
 
     // 3. Fetch & cache leaves and types
     try {
-      const leaves = await ApiService.getLeaves(baseUrl, token);
+      const leaves = await ApiService.getLeaves(baseUrl, token, userId);
       const leaveTypes = await ApiService.getLeaveTypes(baseUrl, token);
       localStorage.setItem('ph_cache_leaves', JSON.stringify(leaves));
       localStorage.setItem('ph_cache_leave_types', JSON.stringify(leaveTypes));
@@ -54,7 +54,7 @@ export function useBackgroundSync(session: UserSession | null, isAuthenticated: 
         console.warn('[BackgroundSync] Failed to fetch currencies metadata:', err);
       }
 
-      const expenses = await ApiService.getExpenses(baseUrl, token);
+      const expenses = await ApiService.getExpenses(baseUrl, token, userId);
       
       // Learn currencies metadata from history records matching ExpenseView logic
       if (Array.isArray(expenses)) {

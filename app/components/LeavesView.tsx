@@ -45,7 +45,7 @@ export default function LeavesView({ session, onBackToDashboard }: LeavesViewPro
     if (!silent) setIsLoading(true);
     setErrorMsg(null);
     try {
-      const fetchedLeaves = await ApiService.getLeaves(session.baseUrl, session.token);
+      const fetchedLeaves = await ApiService.getLeaves(session.baseUrl, session.token, session.userId);
       const fetchedTypes = await ApiService.getLeaveTypes(session.baseUrl, session.token);
       
       setLeaves(fetchedLeaves);
