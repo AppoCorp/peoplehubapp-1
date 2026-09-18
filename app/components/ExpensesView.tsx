@@ -139,6 +139,8 @@ export default function ExpensesView({ session, onBackToDashboard }: ExpensesVie
     loadData(!!(cachedExpenses && cachedCategories));
   }, [session]);
 
+  const isBillMandatory = categories.some((c) => c.is_bill_mandatory === true);
+
   const handleApplySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
@@ -147,6 +149,11 @@ export default function ExpensesView({ session, onBackToDashboard }: ExpensesVie
     // Form validations
     if (!itemName.trim() || !price || !purchaseDate) {
       setErrorMsg('Please fill in all required fields');
+      return;
+    }
+
+    if (isBillMandatory && !receiptFile) {
+      setErrorMsg('Please attach a receipt');
       return;
     }
 
@@ -394,7 +401,7 @@ export default function ExpensesView({ session, onBackToDashboard }: ExpensesVie
           {/* Item Name input */}
           <div className="flex flex-col gap-2">
             <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              Item Name
+              Item Name <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
@@ -410,7 +417,7 @@ export default function ExpensesView({ session, onBackToDashboard }: ExpensesVie
           <div className="grid grid-cols-3 gap-4">
             <div className="flex flex-col gap-2">
               <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                Currency
+                Currency <span className="text-red-500">*</span>
               </label>
               <select
                 value={currency}
@@ -425,7 +432,7 @@ export default function ExpensesView({ session, onBackToDashboard }: ExpensesVie
             
             <div className="col-span-2 flex flex-col gap-2">
               <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                Amount
+                Amount <span className="text-red-500">*</span>
               </label>
               <input
                 type="number"
@@ -442,7 +449,7 @@ export default function ExpensesView({ session, onBackToDashboard }: ExpensesVie
           {/* Category Select */}
           <div className="flex flex-col gap-2">
             <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              Category
+              Category <span className="text-red-500">*</span>
             </label>
             <select
               value={selectedCategoryId}
@@ -461,7 +468,7 @@ export default function ExpensesView({ session, onBackToDashboard }: ExpensesVie
           {/* Purchase Date picker */}
           <div className="flex flex-col gap-2">
             <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              Purchase Date
+              Purchase Date <span className="text-red-500">*</span>
             </label>
             <input
               type="date"
@@ -637,7 +644,7 @@ export default function ExpensesView({ session, onBackToDashboard }: ExpensesVie
           {/* Receipt File upload block */}
           <div className="flex flex-col gap-2">
             <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-              Receipt Attachment
+              Receipt Attachment {isBillMandatory && <span className="text-red-500">*</span>}
             </label>
             <input
               type="file"

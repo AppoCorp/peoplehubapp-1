@@ -68,6 +68,7 @@ export interface ExpenseRecord {
 export interface ExpenseCategory {
   id: number;
   category_name: string;
+  is_bill_mandatory?: boolean;
 }
 
 export interface CurrencyMetadata {
