@@ -69,6 +69,12 @@ export interface ExpenseCategory {
   id: number;
   category_name: string;
   is_bill_mandatory?: boolean;
+  is_project_mandatory?: boolean;
+}
+
+export interface ExpenseProject {
+  id: number;
+  project_name: string;
 }
 
 export interface CurrencyMetadata {
@@ -439,7 +445,8 @@ class ApiService {
     category: string | null,
     currencyCode: string,
     file: File | null,
-    customFieldsData?: Record<string, any>
+    customFieldsData?: Record<string, any>,
+    projectId?: string | number | null
   ): Promise<any> {
     const headers = this.getHeaders(baseUrl, token);
     headers['x-target-path'] = '/api/v1/expense';
@@ -485,6 +492,11 @@ class ApiService {
       formData.append('category_id', category);
     }
 
+    if (projectId) {
+      formData.append('project_id', projectId.toString());
+      formData.append('project[id]', projectId.toString());
+    }
+
     if (file) {
       formData.append('bill', file, file.name);
     }
@@ -513,6 +525,50 @@ class ApiService {
     });
 
     return this.handleResponse(response);
+  }
+
+  public static async getExpenseProjects(baseUrl: string, token: string): Promise<ExpenseProject[]> {
+    try {
+      const headers = this.getHeaders(baseUrl, token);
+      headers['x-target-path'] = '/api/v1/expense/projects';
+
+      const response = await fetch('/api/proxy', {
+        method: 'GET',
+        headers,
+      });
+
+      if (response.ok) {
+        const body = await response.json();
+        if (body.status === 'success' && Array.isArray(body.data)) {
+          return body.data;
+        }
+        if (Array.isArray(body)) {
+          return body;
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to fetch expense projects from /expense/projects:', e);
+    }
+
+    // Fallback to /api/v1/project
+    try {
+      const projHeaders = this.getHeaders(baseUrl, token);
+      projHeaders['x-target-path'] = '/api/v1/project?fields=id,project_name&limit=500';
+      const fallbackRes = await fetch('/api/proxy', {
+        method: 'GET',
+        headers: projHeaders,
+      });
+      if (fallbackRes.ok) {
+        const fallbackData = await this.handleResponse(fallbackRes);
+        if (Array.isArray(fallbackData)) {
+          return fallbackData;
+        }
+      }
+    } catch (e) {
+      console.warn('Fallback project fetch failed:', e);
+    }
+
+    return [];
   }
 
   public static async getExpenseCustomFields(baseUrl: string, token: string): Promise<any[]> {

@@ -16,7 +16,7 @@ import {
   DollarSign
 } from 'lucide-react';
 import { UserSession } from '../services/api';
-import ApiService, { ExpenseRecord, ExpenseCategory } from '../services/api';
+import ApiService, { ExpenseRecord, ExpenseCategory, ExpenseProject } from '../services/api';
 
 interface ExpensesViewProps {
   session: UserSession;
@@ -26,6 +26,7 @@ interface ExpensesViewProps {
 export default function ExpensesView({ session, onBackToDashboard }: ExpensesViewProps) {
   const [expenses, setExpenses] = useState<ExpenseRecord[]>([]);
   const [categories, setCategories] = useState<ExpenseCategory[]>([]);
+  const [projects, setProjects] = useState<ExpenseProject[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showApplyForm, setShowApplyForm] = useState(false);
@@ -37,6 +38,7 @@ export default function ExpensesView({ session, onBackToDashboard }: ExpensesVie
   const [currency, setCurrency] = useState('INR');
   const [price, setPrice] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
+  const [selectedProjectId, setSelectedProjectId] = useState<string>('');
   const [purchaseDate, setPurchaseDate] = useState('');
   const [purchasedFrom, setPurchasedFrom] = useState('');
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
@@ -71,6 +73,13 @@ export default function ExpensesView({ session, onBackToDashboard }: ExpensesVie
         console.warn('Failed to load expense categories (unsupported backend endpoint):', e);
       }
 
+      let projectsList: ExpenseProject[] = [];
+      try {
+        projectsList = await ApiService.getExpenseProjects(session.baseUrl, session.token);
+      } catch (e) {
+        console.warn('Failed to load expense projects:', e);
+      }
+
       let customFieldsList: any[] = [];
       try {
         customFieldsList = await ApiService.getExpenseCustomFields(session.baseUrl, session.token);
@@ -80,6 +89,7 @@ export default function ExpensesView({ session, onBackToDashboard }: ExpensesVie
       }
       
       console.log('Expense categories fetched:', categoriesList);
+      console.log('Expense projects fetched:', projectsList);
 
       // Learn currencies metadata from history records if missing, matching Flutter logic
       if (Array.isArray(expensesList)) {
@@ -98,10 +108,12 @@ export default function ExpensesView({ session, onBackToDashboard }: ExpensesVie
 
       setExpenses(expensesList);
       setCategories(categoriesList);
+      setProjects(projectsList);
       setCustomFields(customFieldsList);
       
       localStorage.setItem('ph_cache_expenses', JSON.stringify(expensesList));
       localStorage.setItem('ph_cache_expense_categories', JSON.stringify(categoriesList));
+      localStorage.setItem('ph_cache_expense_projects', JSON.stringify(projectsList));
       localStorage.setItem('ph_cache_expense_custom_fields', JSON.stringify(customFieldsList));
 
       if (categoriesList.length > 0) {
@@ -118,6 +130,7 @@ export default function ExpensesView({ session, onBackToDashboard }: ExpensesVie
   useEffect(() => {
     const cachedExpenses = localStorage.getItem('ph_cache_expenses');
     const cachedCategories = localStorage.getItem('ph_cache_expense_categories');
+    const cachedProjects = localStorage.getItem('ph_cache_expense_projects');
     const cachedCustomFields = localStorage.getItem('ph_cache_expense_custom_fields');
     if (cachedExpenses && cachedCategories) {
       try {
@@ -125,6 +138,9 @@ export default function ExpensesView({ session, onBackToDashboard }: ExpensesVie
         const categoriesData = JSON.parse(cachedCategories);
         setExpenses(expensesData);
         setCategories(categoriesData);
+        if (cachedProjects) {
+          setProjects(JSON.parse(cachedProjects));
+        }
         if (cachedCustomFields) {
           setCustomFields(JSON.parse(cachedCustomFields));
         }
@@ -140,6 +156,7 @@ export default function ExpensesView({ session, onBackToDashboard }: ExpensesVie
   }, [session]);
 
   const isBillMandatory = categories.some((c) => c.is_bill_mandatory === true);
+  const isProjectMandatory = categories.some((c) => c.is_project_mandatory === true);
 
   const handleApplySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -149,6 +166,11 @@ export default function ExpensesView({ session, onBackToDashboard }: ExpensesVie
     // Form validations
     if (!itemName.trim() || !price || !purchaseDate) {
       setErrorMsg('Please fill in all required fields');
+      return;
+    }
+
+    if (isProjectMandatory && !selectedProjectId) {
+      setErrorMsg('Please select a project');
       return;
     }
 
@@ -190,12 +212,14 @@ export default function ExpensesView({ session, onBackToDashboard }: ExpensesVie
         selectedCategoryId || null,
         currency,
         receiptFile,
-        customFieldsValues
+        customFieldsValues,
+        selectedProjectId || null
       );
 
       // Reset form
       setItemName('');
       setPrice('');
+      setSelectedProjectId('');
       setPurchasedFrom('');
       setReceiptFile(null);
       setCustomFieldsValues({});
@@ -444,6 +468,26 @@ export default function ExpensesView({ session, onBackToDashboard }: ExpensesVie
                 className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent dark:text-slate-200"
               />
             </div>
+          </div>
+
+          {/* Project Select */}
+          <div className="flex flex-col gap-2">
+            <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+              Project {isProjectMandatory && <span className="text-red-500">*</span>}
+            </label>
+            <select
+              value={selectedProjectId}
+              onChange={(e) => setSelectedProjectId(e.target.value)}
+              required={isProjectMandatory}
+              className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent dark:text-slate-200"
+            >
+              <option value="">{isProjectMandatory ? 'Select Project' : 'Select Project (Optional)'}</option>
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.project_name}
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* Category Select */}
