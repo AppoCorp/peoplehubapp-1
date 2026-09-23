@@ -650,13 +650,42 @@ export default function LeavesView({ session, onBackToDashboard }: LeavesViewPro
                       key={leave.id || idx}
                       className="p-4 flex items-start gap-4 hover:bg-slate-50/40 dark:hover:bg-slate-800/10 transition-colors"
                     >
-                      {/* Avatar shape */}
-                      <div className="w-10 h-10 rounded-full bg-slate-50 dark:bg-slate-950 flex items-center justify-center shrink-0 border border-slate-100/50 dark:border-slate-800 overflow-hidden mt-0.5">
-                        <img 
-                          src={idx % 2 === 0 ? '/1.png' : '/2.png'} 
-                          alt={leave.typeNameVisible} 
-                          className="w-8 h-8 object-contain" 
-                        />
+                      {/* Left Column: Avatar + Action Icons */}
+                      <div className="flex flex-col items-center shrink-0">
+                        <div className="w-10 h-10 rounded-full bg-slate-50 dark:bg-slate-950 flex items-center justify-center border border-slate-100/50 dark:border-slate-800 overflow-hidden mt-0.5">
+                          <img 
+                            src={idx % 2 === 0 ? '/1.png' : '/2.png'} 
+                            alt={leave.typeNameVisible} 
+                            className="w-8 h-8 object-contain" 
+                          />
+                        </div>
+
+                        {/* Actions for Pending Leaves on extreme left */}
+                        {isPending && (
+                          <div className="flex items-center justify-center gap-1 mt-2.5">
+                            <button
+                              type="button"
+                              title="Edit Leave"
+                              onClick={() => handleOpenEdit(leave)}
+                              className="p-1.5 text-slate-400 hover:text-indigo-600 dark:text-slate-500 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 rounded-lg transition-colors cursor-pointer"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              title="Cancel Leave"
+                              onClick={() => handleDeleteLeave(leave)}
+                              disabled={deletingId === leave.id}
+                              className="p-1.5 text-slate-400 hover:text-rose-600 dark:text-slate-500 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+                            >
+                              {deletingId === leave.id ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin text-rose-500" />
+                              ) : (
+                                <Trash2 className="w-3.5 h-3.5" />
+                              )}
+                            </button>
+                          </div>
+                        )}
                       </div>
 
                       {/* Details */}
@@ -681,33 +710,6 @@ export default function LeavesView({ session, onBackToDashboard }: LeavesViewPro
                           <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 italic bg-slate-50/50 dark:bg-slate-950/30 p-2 rounded-xl border border-slate-100/50 dark:border-slate-800/40">
                             "{leave.reason}"
                           </p>
-                        )}
-
-                        {/* Actions for Pending Leaves */}
-                        {isPending && (
-                          <div className="flex items-center justify-end gap-2 pt-1.5 mt-0.5 border-t border-slate-100 dark:border-slate-800/60">
-                            <button
-                              type="button"
-                              onClick={() => handleOpenEdit(leave)}
-                              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/40 rounded-xl transition-all cursor-pointer"
-                            >
-                              <Pencil className="w-3.5 h-3.5" />
-                              <span>Edit</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteLeave(leave)}
-                              disabled={deletingId === leave.id}
-                              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-rose-600 dark:text-rose-400 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/40 rounded-xl transition-all cursor-pointer disabled:opacity-50"
-                            >
-                              {deletingId === leave.id ? (
-                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                              ) : (
-                                <Trash2 className="w-3.5 h-3.5" />
-                              )}
-                              <span>Cancel</span>
-                            </button>
-                          </div>
                         )}
                       </div>
                     </div>
