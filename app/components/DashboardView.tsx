@@ -40,6 +40,7 @@ export default function DashboardView({ session, onNavigateToTab }: DashboardVie
   const [longitude, setLongitude] = useState<string | null>(null);
   const [notification, setNotification] = useState<{ text: string; type: 'success' | 'error' | 'warning' } | null>(null);
   const [showInfoModal, setShowInfoModal] = useState(false);
+  const [showLocationModal, setShowLocationModal] = useState(false);
 
   // Time ticker
   useEffect(() => {
@@ -202,7 +203,15 @@ export default function DashboardView({ session, onNavigateToTab }: DashboardVie
     return { latStr, lngStr };
   };
 
-  const handleClockIn = async () => {
+  const handleClockInClick = () => {
+    if (showWorkingFrom && workingFromLocations.length > 0) {
+      setShowLocationModal(true);
+    } else {
+      executeClockIn();
+    }
+  };
+
+  const executeClockIn = async (locationToUse?: string) => {
     setIsSubmitting(true);
     setIsLocationLoading(true);
     let latStr = '';
@@ -225,16 +234,18 @@ export default function DashboardView({ session, onNavigateToTab }: DashboardVie
     }
 
     try {
-      const workFromType = workingFromLocations.length > 0 ? 'other' : selectedWorkingFrom;
+      const targetLocation = locationToUse || selectedWorkingFrom || (workingFromLocations.length > 0 ? workingFromLocations[0] : undefined);
+      const workFromType = workingFromLocations.length > 0 ? 'other' : targetLocation;
       await ApiService.checkIn(
         session.baseUrl,
         session.token,
         latStr || undefined,
         lngStr || undefined,
-        showWorkingFrom ? selectedWorkingFrom : undefined,
+        showWorkingFrom ? targetLocation : undefined,
         showWorkingFrom ? workFromType : undefined
       );
       await fetchAttendanceStatus();
+      setShowLocationModal(false);
       showNotification('Clocked in successfully', 'success');
     } catch (err: any) {
       showNotification(err.message || 'Clock-in failed', 'error');
@@ -423,6 +434,105 @@ export default function DashboardView({ session, onNavigateToTab }: DashboardVie
         </div>
       )}
 
+      {/* Location Selection Modal (triggered upon clicking CLOCK IN) */}
+      {showLocationModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-3xl p-6 shadow-2xl border border-slate-100 dark:border-slate-800 flex flex-col gap-5 relative animate-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0">
+                  <MapPin className="w-4.5 h-4.5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-850 dark:text-slate-100">
+                    Choose Location
+                  </h3>
+                  <p className="text-[11px] text-slate-400 font-medium">
+                    Where are you working from today?
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                disabled={isSubmitting}
+                onClick={() => setShowLocationModal(false)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer disabled:opacity-50"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Location Options */}
+            <div className="flex flex-col gap-2.5 max-h-60 overflow-y-auto py-1">
+              {workingFromLocations.map((loc) => {
+                const isSelected = selectedWorkingFrom === loc;
+                return (
+                  <button
+                    key={loc}
+                    type="button"
+                    disabled={isSubmitting}
+                    onClick={() => setSelectedWorkingFrom(loc)}
+                    className={`flex items-center justify-between p-3.5 rounded-2xl border transition-all cursor-pointer text-left ${
+                      isSelected
+                        ? 'border-indigo-600 bg-indigo-50/70 dark:bg-indigo-950/30 dark:border-indigo-500 shadow-sm'
+                        : 'border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/30 hover:border-slate-300 dark:hover:border-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
+                        isSelected 
+                          ? 'bg-indigo-600 text-white shadow-sm' 
+                          : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200/60 dark:border-slate-700'
+                      }`}>
+                        <Building2 className="w-4 h-4" />
+                      </div>
+                      <span className={`text-sm font-bold ${
+                        isSelected 
+                          ? 'text-indigo-950 dark:text-indigo-200' 
+                          : 'text-slate-700 dark:text-slate-300'
+                      }`}>
+                        {loc.charAt(0).toUpperCase() + loc.slice(1)}
+                      </span>
+                    </div>
+                    {isSelected && (
+                      <CheckCircle className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex gap-2.5 pt-2">
+              <button
+                type="button"
+                disabled={isSubmitting}
+                onClick={() => setShowLocationModal(false)}
+                className="flex-1 py-3.5 px-4 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold rounded-2xl text-xs transition-all cursor-pointer disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isSubmitting || !selectedWorkingFrom}
+                onClick={() => executeClockIn(selectedWorkingFrom)}
+                className="flex-[2] py-3.5 px-4 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-2xl text-xs tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm shadow-emerald-200 dark:shadow-none disabled:opacity-50"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>{isLocationLoading ? 'VERIFYING...' : 'CLOCKING IN...'}</span>
+                  </>
+                ) : (
+                  <span>CONFIRM & CLOCK IN</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Greeting Banner */}
       <div className="w-full bg-gradient-to-br from-indigo-50 to-emerald-50/50 dark:from-slate-900 dark:to-emerald-950/20 rounded-3xl p-6 border border-indigo-100/50 dark:border-slate-800/80 shadow-sm relative overflow-hidden flex justify-between items-center transition-all duration-300">
         <div className="flex flex-col gap-1 z-10 max-w-[65%]">
@@ -483,37 +593,10 @@ export default function DashboardView({ session, onNavigateToTab }: DashboardVie
           </div>
         )}
 
-        {/* Working From Dropdown Selector (visible when setting is enabled and not clocked in) */}
-        {!isClockedIn && showWorkingFrom && workingFromLocations.length > 0 && (
-          <div className="mt-5 flex flex-col gap-1.5">
-            <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-              <MapPin className="w-3.5 h-3.5 text-indigo-500" />
-              Working From
-            </label>
-            <div className="relative">
-              <select
-                value={selectedWorkingFrom}
-                onChange={(e) => setSelectedWorkingFrom(e.target.value)}
-                disabled={isSubmitting}
-                className="w-full appearance-none bg-slate-50 dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700/80 rounded-2xl px-4 py-3 text-sm font-bold text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all cursor-pointer disabled:opacity-50 pr-10"
-              >
-                {workingFromLocations.map((loc) => (
-                  <option key={loc} value={loc} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-medium">
-                    {loc.charAt(0).toUpperCase() + loc.slice(1)}
-                  </option>
-                ))}
-              </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-400">
-                <ChevronRight className="w-4 h-4 rotate-90" />
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Main Check-In/Out Button */}
         <div className="mt-6">
           <button
-            onClick={isClockedIn ? handleClockOut : handleClockIn}
+            onClick={isClockedIn ? handleClockOut : handleClockInClick}
             disabled={isSubmitting || (!isClockedIn && remainingClockIn <= 0)}
             className={`w-full py-4 text-white font-bold rounded-2xl tracking-wider active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-2 shadow-sm ${
               (!isClockedIn && remainingClockIn <= 0)
