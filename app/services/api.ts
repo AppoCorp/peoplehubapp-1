@@ -18,6 +18,8 @@ export interface AttendanceRecord {
   clock_in_time: string;
   clock_out_time: string | null;
   work_from_type: string;
+  working_from?: string;
+  clock_out_time_working_from?: string;
   latitude?: string;
   longitude?: string;
   clock_out_latitude?: string;
@@ -233,7 +235,9 @@ class ApiService {
     baseUrl: string,
     token: string,
     latitude?: string,
-    longitude?: string
+    longitude?: string,
+    workingFrom?: string,
+    workFromType?: string
   ): Promise<any> {
     const headers = this.getHeaders(baseUrl, token);
     headers['x-target-path'] = '/api/v1/attendance/clock-in';
@@ -244,6 +248,8 @@ class ApiService {
       body: JSON.stringify({
         currentLatitude: latitude || null,
         currentLongitude: longitude || null,
+        working_from: workingFrom || undefined,
+        work_from_type: workFromType || undefined,
       }),
     });
 

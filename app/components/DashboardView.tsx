@@ -29,6 +29,9 @@ export default function DashboardView({ session, onNavigateToTab }: DashboardVie
   const [dateStr, setDateStr] = useState('');
   const [isClockedIn, setIsClockedIn] = useState(false);
   const [remainingClockIn, setRemainingClockIn] = useState<number>(1);
+  const [showWorkingFrom, setShowWorkingFrom] = useState(false);
+  const [workingFromLocations, setWorkingFromLocations] = useState<string[]>([]);
+  const [selectedWorkingFrom, setSelectedWorkingFrom] = useState<string>('');
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLocationLoading, setIsLocationLoading] = useState(false);
@@ -68,9 +71,16 @@ export default function DashboardView({ session, onNavigateToTab }: DashboardVie
       const response = await ApiService.getTodayAttendance(session.baseUrl, session.token);
       const record = response && response.attendance ? response.attendance : null;
       const remaining = response && typeof response.remaining_clock_in !== 'undefined' ? response.remaining_clock_in : 1;
+      const showWF = Boolean(response && response.show_working_from);
+      const locations = (response && Array.isArray(response.working_from_locations)) ? response.working_from_locations : [];
       
       setActiveAttendanceRecord(record);
       setRemainingClockIn(remaining);
+      setShowWorkingFrom(showWF);
+      setWorkingFromLocations(locations);
+      if (locations.length > 0) {
+        setSelectedWorkingFrom((prev) => (prev && locations.includes(prev) ? prev : locations[0]));
+      }
       
       const clockedIn = record !== null && 
         (!record.clock_out_time || 
@@ -91,9 +101,16 @@ export default function DashboardView({ session, onNavigateToTab }: DashboardVie
         const response = JSON.parse(cached);
         const record = response && response.attendance ? response.attendance : null;
         const remaining = response && typeof response.remaining_clock_in !== 'undefined' ? response.remaining_clock_in : 1;
+        const showWF = Boolean(response && response.show_working_from);
+        const locations = (response && Array.isArray(response.working_from_locations)) ? response.working_from_locations : [];
         
         setActiveAttendanceRecord(record);
         setRemainingClockIn(remaining);
+        setShowWorkingFrom(showWF);
+        setWorkingFromLocations(locations);
+        if (locations.length > 0) {
+          setSelectedWorkingFrom((prev) => (prev && locations.includes(prev) ? prev : locations[0]));
+        }
         
         const clockedIn = record !== null && 
           (!record.clock_out_time || 
@@ -192,11 +209,14 @@ export default function DashboardView({ session, onNavigateToTab }: DashboardVie
     }
 
     try {
+      const workFromType = workingFromLocations.length > 0 ? 'other' : selectedWorkingFrom;
       await ApiService.checkIn(
         session.baseUrl,
         session.token,
         latStr || undefined,
-        lngStr || undefined
+        lngStr || undefined,
+        showWorkingFrom ? selectedWorkingFrom : undefined,
+        showWorkingFrom ? workFromType : undefined
       );
       await fetchAttendanceStatus();
       showNotification('Clocked in successfully', 'success');
@@ -436,11 +456,41 @@ export default function DashboardView({ session, onNavigateToTab }: DashboardVie
 
         {/* Geolocation visual details row */}
         {activeAttendanceRecord && (
-          <div className="mt-4 px-3 py-2 bg-slate-50/50 dark:bg-slate-950/30 rounded-xl flex flex-wrap justify-between text-[11px] text-slate-400 dark:text-slate-500 border border-slate-100/50 dark:border-slate-800/40">
+          <div className="mt-4 px-3 py-2 bg-slate-50/50 dark:bg-slate-950/30 rounded-xl flex flex-wrap justify-between items-center text-[11px] text-slate-400 dark:text-slate-500 border border-slate-100/50 dark:border-slate-800/40 gap-2">
             <div>Check In: <span className="font-bold text-slate-600 dark:text-slate-350">{formatTime(activeAttendanceRecord.clock_in_time)}</span></div>
+            {activeAttendanceRecord.working_from && (
+              <div>Working From: <span className="font-bold text-slate-600 dark:text-slate-350">{activeAttendanceRecord.working_from}</span></div>
+            )}
             {activeAttendanceRecord.clock_out_time && (
               <div>Check Out: <span className="font-bold text-slate-600 dark:text-slate-350">{formatTime(activeAttendanceRecord.clock_out_time)}</span></div>
             )}
+          </div>
+        )}
+
+        {/* Working From Dropdown Selector (visible when setting is enabled and not clocked in) */}
+        {!isClockedIn && showWorkingFrom && workingFromLocations.length > 0 && (
+          <div className="mt-5 flex flex-col gap-1.5">
+            <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+              <MapPin className="w-3.5 h-3.5 text-indigo-500" />
+              Working From
+            </label>
+            <div className="relative">
+              <select
+                value={selectedWorkingFrom}
+                onChange={(e) => setSelectedWorkingFrom(e.target.value)}
+                disabled={isSubmitting}
+                className="w-full appearance-none bg-slate-50 dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700/80 rounded-2xl px-4 py-3 text-sm font-bold text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all cursor-pointer disabled:opacity-50 pr-10"
+              >
+                {workingFromLocations.map((loc) => (
+                  <option key={loc} value={loc} className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-medium">
+                    {loc.charAt(0).toUpperCase() + loc.slice(1)}
+                  </option>
+                ))}
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-400">
+                <ChevronRight className="w-4 h-4 rotate-90" />
+              </div>
+            </div>
           </div>
         )}
 
