@@ -71,8 +71,16 @@ export default function DashboardView({ session, onNavigateToTab }: DashboardVie
       const response = await ApiService.getTodayAttendance(session.baseUrl, session.token);
       const record = response && response.attendance ? response.attendance : null;
       const remaining = response && typeof response.remaining_clock_in !== 'undefined' ? response.remaining_clock_in : 1;
-      const showWF = Boolean(response && response.show_working_from);
-      const locations = (response && Array.isArray(response.working_from_locations)) ? response.working_from_locations : [];
+      const showWF = Boolean(
+        response && (
+          response.show_working_from === true ||
+          response.show_working_from === 1 ||
+          response.show_working_from === '1' ||
+          response.show_working_from === 'yes'
+        )
+      );
+      const rawLocations = (response && Array.isArray(response.working_from_locations)) ? response.working_from_locations : [];
+      const locations = (rawLocations.length > 0) ? rawLocations : (showWF ? ['Home', 'Office', 'Other'] : []);
       
       setActiveAttendanceRecord(record);
       setRemainingClockIn(remaining);
@@ -101,8 +109,16 @@ export default function DashboardView({ session, onNavigateToTab }: DashboardVie
         const response = JSON.parse(cached);
         const record = response && response.attendance ? response.attendance : null;
         const remaining = response && typeof response.remaining_clock_in !== 'undefined' ? response.remaining_clock_in : 1;
-        const showWF = Boolean(response && response.show_working_from);
-        const locations = (response && Array.isArray(response.working_from_locations)) ? response.working_from_locations : [];
+        const showWF = Boolean(
+          response && (
+            response.show_working_from === true ||
+            response.show_working_from === 1 ||
+            response.show_working_from === '1' ||
+            response.show_working_from === 'yes'
+          )
+        );
+        const rawLocations = (response && Array.isArray(response.working_from_locations)) ? response.working_from_locations : [];
+        const locations = (rawLocations.length > 0) ? rawLocations : (showWF ? ['Home', 'Office', 'Other'] : []);
         
         setActiveAttendanceRecord(record);
         setRemainingClockIn(remaining);
