@@ -183,6 +183,24 @@ export default function LeavesView({ session, onBackToDashboard }: LeavesViewPro
     });
   };
 
+  const formatToYmd = (dateStr?: string | null): string => {
+    if (!dateStr) return '';
+    const trimmed = dateStr.trim();
+    const match = trimmed.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (match) return match[1];
+
+    try {
+      const d = new Date(trimmed);
+      if (!isNaN(d.getTime())) {
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      }
+    } catch {}
+    return '';
+  };
+
   const handleOpenApply = () => {
     setEditingLeave(null);
     setReason('');
@@ -200,6 +218,28 @@ export default function LeavesView({ session, onBackToDashboard }: LeavesViewPro
     setEditingLeave(leave);
     setSelectedLeaveTypeId(leave.leave_type_id ? leave.leave_type_id.toString() : (leaveTypes[0]?.id?.toString() || ''));
     setReason(leave.reason || '');
+
+    const startYmd = formatToYmd(leave.start_date || leave.leave_date);
+    const endYmd = formatToYmd(leave.end_date || leave.leave_date || leave.start_date);
+
+    if ((leave.total_days && parseFloat(leave.total_days) > 1 && leave.start_date !== leave.end_date) || leave.duration === 'multiple days') {
+      setDurationType('Multiple');
+      setStartDate(startYmd);
+      setEndDate(endYmd);
+      setSingleDate(startYmd);
+    } else if (leave.duration === 'half day') {
+      const halfType = leave.half_day_type === 'second_half' ? 'Second Half' : 'First Half';
+      setDurationType(halfType);
+      setSingleDate(startYmd);
+      setStartDate(startYmd);
+      setEndDate(startYmd);
+    } else {
+      setDurationType('Full Day');
+      setSingleDate(startYmd);
+      setStartDate(startYmd);
+      setEndDate(startYmd);
+    }
+
     setShowApplyForm(true);
   };
 
@@ -235,51 +275,6 @@ export default function LeavesView({ session, onBackToDashboard }: LeavesViewPro
     setErrorMsg(null);
     setSuccessMsg(null);
 
-    if (editingLeave) {
-      if (!selectedLeaveTypeId || !reason.trim()) {
-        setErrorMsg('Please select a leave type and provide a reason');
-        return;
-      }
-
-      setIsSubmitting(true);
-      try {
-        const leaveTypeId = parseInt(selectedLeaveTypeId, 10);
-        const subIds = Array.isArray(editingLeave.subLeaveIds) && editingLeave.subLeaveIds.length > 0 
-          ? editingLeave.subLeaveIds 
-          : [editingLeave.id];
-
-        for (const id of subIds) {
-          await ApiService.updateLeave(
-            session.baseUrl,
-            session.token,
-            id,
-            leaveTypeId,
-            editingLeave.leave_date || editingLeave.start_date || '',
-            editingLeave.duration || 'full day',
-            reason.trim(),
-            editingLeave.half_day_type || null
-          );
-        }
-
-        setSuccessMsg('Leave request updated successfully');
-        setReason('');
-        setSingleDate('');
-        setStartDate('');
-        setEndDate('');
-        setDurationType('Full Day');
-        setEditingLeave(null);
-        setShowApplyForm(false);
-        await loadData();
-      } catch (err: any) {
-        console.error(err);
-        setErrorMsg(err.message || 'Failed to update leave request');
-      } finally {
-        setIsSubmitting(false);
-      }
-      return;
-    }
-
-    // Validation for new leave
     const dateInput = durationType === 'Multiple' ? startDate : singleDate;
     if (!selectedLeaveTypeId || !dateInput || !reason.trim()) {
       setErrorMsg('Please fill in all required fields');
@@ -306,18 +301,40 @@ export default function LeavesView({ session, onBackToDashboard }: LeavesViewPro
           ? 'second_half' 
           : null;
 
-      await ApiService.createLeave(
-        session.baseUrl,
-        session.token,
-        session.userId,
-        parseInt(selectedLeaveTypeId, 10),
-        durationType === 'Multiple' ? startDate : singleDate,
-        apiDuration,
-        reason.trim(),
-        durationType === 'Multiple' ? endDate : null,
-        halfDayType
-      );
-      setSuccessMsg('Leave request submitted successfully');
+      if (editingLeave) {
+        const leaveTypeId = parseInt(selectedLeaveTypeId, 10);
+        const subIds = Array.isArray(editingLeave.subLeaveIds) && editingLeave.subLeaveIds.length > 0 
+          ? editingLeave.subLeaveIds 
+          : [editingLeave.id];
+
+        for (const id of subIds) {
+          await ApiService.updateLeave(
+            session.baseUrl,
+            session.token,
+            id,
+            leaveTypeId,
+            dateInput,
+            apiDuration,
+            reason.trim(),
+            halfDayType
+          );
+        }
+
+        setSuccessMsg('Leave request updated successfully');
+      } else {
+        await ApiService.createLeave(
+          session.baseUrl,
+          session.token,
+          session.userId,
+          parseInt(selectedLeaveTypeId, 10),
+          durationType === 'Multiple' ? startDate : singleDate,
+          apiDuration,
+          reason.trim(),
+          durationType === 'Multiple' ? endDate : null,
+          halfDayType
+        );
+        setSuccessMsg('Leave request submitted successfully');
+      }
 
       // Reset form
       setReason('');
@@ -332,7 +349,7 @@ export default function LeavesView({ session, onBackToDashboard }: LeavesViewPro
       await loadData();
     } catch (err: any) {
       console.error(err);
-      setErrorMsg(err.message || 'Failed to submit leave request');
+      setErrorMsg(err.message || (editingLeave ? 'Failed to update leave request' : 'Failed to submit leave request'));
     } finally {
       setIsSubmitting(false);
     }
@@ -462,91 +479,73 @@ export default function LeavesView({ session, onBackToDashboard }: LeavesViewPro
             </select>
           </div>
 
-          {/* Leave Schedule Preview when Editing */}
-          {editingLeave && (
-            <div className="flex items-center justify-between p-3.5 bg-slate-50 dark:bg-slate-950/60 rounded-2xl border border-slate-100 dark:border-slate-800/60 text-xs">
-              <span className="text-slate-500 dark:text-slate-400 font-medium">
-                Leave Schedule
-              </span>
-              <span className="font-bold text-slate-700 dark:text-slate-300">
-                {formatDateDisplay(editingLeave.start_date || editingLeave.leave_date, editingLeave.end_date || editingLeave.leave_date)}
-                {editingLeave.total_days ? ` (${parseFloat(editingLeave.total_days)} ${parseFloat(editingLeave.total_days) === 1 ? 'Day' : 'Days'})` : ''}
-              </span>
+          {/* Duration Type selector */}
+          <div className="flex flex-col gap-2">
+            <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+              Duration Type
+            </label>
+            <div className="grid grid-cols-4 gap-1 bg-slate-50 dark:bg-slate-950 p-1 rounded-xl border border-slate-100 dark:border-slate-800">
+              {(['Full Day', 'Multiple', 'First Half', 'Second Half'] as const).map((opt) => {
+                const isSelected = durationType === opt;
+                return (
+                  <button
+                    key={opt}
+                    type="button"
+                    onClick={() => setDurationType(opt)}
+                    className={`py-2 rounded-lg text-[9px] font-bold text-center transition-all ${
+                      isSelected
+                        ? 'bg-white dark:bg-slate-800 text-primary shadow-sm border border-slate-100/50 dark:border-slate-800'
+                        : 'text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-350 cursor-pointer'
+                    }`}
+                  >
+                    {opt}
+                  </button>
+                );
+              })}
             </div>
-          )}
+          </div>
 
-          {/* Duration Type & Date Pickers (Only for New Leave Application) */}
-          {!editingLeave && (
-            <>
-              {/* Duration Type selector */}
+          {/* Date Picker Fields */}
+          {durationType === 'Multiple' ? (
+            <div className="grid grid-cols-2 gap-4">
               <div className="flex flex-col gap-2">
                 <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                  Duration Type
+                  Start Date
                 </label>
-                <div className="grid grid-cols-4 gap-1 bg-slate-50 dark:bg-slate-950 p-1 rounded-xl border border-slate-100 dark:border-slate-800">
-                  {(['Full Day', 'Multiple', 'First Half', 'Second Half'] as const).map((opt) => {
-                    const isSelected = durationType === opt;
-                    return (
-                      <button
-                        key={opt}
-                        type="button"
-                        onClick={() => setDurationType(opt)}
-                        className={`py-2 rounded-lg text-[9px] font-bold text-center transition-all ${
-                          isSelected
-                            ? 'bg-white dark:bg-slate-800 text-primary shadow-sm border border-slate-100/50 dark:border-slate-800'
-                            : 'text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-350 cursor-pointer'
-                        }`}
-                      >
-                        {opt}
-                      </button>
-                    );
-                  })}
-                </div>
+                <input
+                  type="date"
+                  required
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent dark:text-slate-200"
+                />
               </div>
-
-              {/* Date Picker Fields */}
-              {durationType === 'Multiple' ? (
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="flex flex-col gap-2">
-                    <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                      Start Date
-                    </label>
-                    <input
-                      type="date"
-                      required
-                      value={startDate}
-                      onChange={(e) => setStartDate(e.target.value)}
-                      className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent dark:text-slate-200"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                      End Date
-                    </label>
-                    <input
-                      type="date"
-                      required
-                      value={endDate}
-                      onChange={(e) => setEndDate(e.target.value)}
-                      className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent dark:text-slate-200"
-                    />
-                  </div>
-                </div>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                    Select Date
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={singleDate}
-                    onChange={(e) => setSingleDate(e.target.value)}
-                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent dark:text-slate-200"
-                  />
-                </div>
-              )}
-            </>
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                  End Date
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent dark:text-slate-200"
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                Select Date
+              </label>
+              <input
+                type="date"
+                required
+                value={singleDate}
+                onChange={(e) => setSingleDate(e.target.value)}
+                className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent dark:text-slate-200"
+              />
+            </div>
           )}
 
           {/* Reason Textarea */}
