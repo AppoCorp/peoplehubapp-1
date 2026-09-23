@@ -700,7 +700,7 @@ export default function LeavesView({ session, onBackToDashboard }: LeavesViewPro
                               type="button"
                               title="Edit Leave"
                               onClick={() => handleOpenEdit(leave)}
-                              className="p-1.5 text-slate-400 hover:text-indigo-600 dark:text-slate-500 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 rounded-lg transition-colors cursor-pointer"
+                              className="p-1.5 text-amber-500 hover:text-amber-600 dark:text-amber-400 dark:hover:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/50 rounded-lg transition-colors cursor-pointer"
                             >
                               <Pencil className="w-3.5 h-3.5" />
                             </button>
@@ -709,7 +709,7 @@ export default function LeavesView({ session, onBackToDashboard }: LeavesViewPro
                               title="Cancel Leave"
                               onClick={() => handleDeleteLeave(leave)}
                               disabled={deletingId === leave.id}
-                              className="p-1.5 text-slate-400 hover:text-rose-600 dark:text-slate-500 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+                              className="p-1.5 text-rose-500 hover:text-rose-600 dark:text-rose-400 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
                             >
                               {deletingId === leave.id ? (
                                 <Loader2 className="w-3.5 h-3.5 animate-spin text-rose-500" />
