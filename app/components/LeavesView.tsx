@@ -14,7 +14,9 @@ import {
   Umbrella,
   CalendarDays as CalendarIcon,
   Heart,
-  FileText
+  FileText,
+  Pencil,
+  Trash2
 } from 'lucide-react';
 import { UserSession } from '../services/api';
 import ApiService, { LeaveRecord, LeaveType } from '../services/api';
@@ -30,6 +32,8 @@ export default function LeavesView({ session, onBackToDashboard }: LeavesViewPro
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showApplyForm, setShowApplyForm] = useState(false);
+  const [editingLeave, setEditingLeave] = useState<any | null>(null);
+  const [deletingId, setDeletingId] = useState<number | string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
@@ -107,6 +111,7 @@ export default function LeavesView({ session, onBackToDashboard }: LeavesViewPro
           start_date: dateStr,
           end_date: dateStr,
           total_days: durationValue,
+          subLeaveIds: [leave.id],
         });
       } else {
         if (groups[uniqueId]) {
@@ -119,6 +124,7 @@ export default function LeavesView({ session, onBackToDashboard }: LeavesViewPro
           if (newDate > currentEnd) group.end_date = dateStr;
 
           group.total_days += durationValue;
+          group.subLeaveIds.push(leave.id);
         } else {
           const newGroup = {
             ...leave,
@@ -126,6 +132,7 @@ export default function LeavesView({ session, onBackToDashboard }: LeavesViewPro
             start_date: dateStr,
             end_date: dateStr,
             total_days: durationValue,
+            subLeaveIds: [leave.id],
           };
           groups[uniqueId] = newGroup;
           result.push(newGroup);
@@ -176,6 +183,68 @@ export default function LeavesView({ session, onBackToDashboard }: LeavesViewPro
     });
   };
 
+  const handleOpenApply = () => {
+    setEditingLeave(null);
+    setReason('');
+    setSingleDate('');
+    setStartDate('');
+    setEndDate('');
+    setDurationType('Full Day');
+    if (leaveTypes.length > 0) {
+      setSelectedLeaveTypeId(leaveTypes[0].id.toString());
+    }
+    setShowApplyForm(true);
+  };
+
+  const handleOpenEdit = (leave: any) => {
+    setEditingLeave(leave);
+    setSelectedLeaveTypeId(leave.leave_type_id ? leave.leave_type_id.toString() : (leaveTypes[0]?.id?.toString() || ''));
+    setReason(leave.reason || '');
+
+    if (leave.total_days && leave.total_days > 1 && leave.start_date !== leave.end_date) {
+      setDurationType('Multiple');
+      setStartDate(leave.start_date || '');
+      setEndDate(leave.end_date || '');
+      setSingleDate(leave.start_date || '');
+    } else if (leave.duration === 'half day') {
+      const halfType = leave.half_day_type === 'second_half' ? 'Second Half' : 'First Half';
+      setDurationType(halfType);
+      setSingleDate(leave.leave_date || leave.start_date || '');
+    } else {
+      setDurationType('Full Day');
+      setSingleDate(leave.leave_date || leave.start_date || '');
+    }
+
+    setShowApplyForm(true);
+  };
+
+  const handleDeleteLeave = async (leave: any) => {
+    if (!window.confirm('Are you sure you want to cancel this leave request?')) {
+      return;
+    }
+
+    setDeletingId(leave.id);
+    setErrorMsg(null);
+    setSuccessMsg(null);
+
+    try {
+      if (leave.unique_id && Array.isArray(leave.subLeaveIds) && leave.subLeaveIds.length > 0) {
+        for (const subId of leave.subLeaveIds) {
+          await ApiService.deleteLeave(session.baseUrl, session.token, subId);
+        }
+      } else {
+        await ApiService.deleteLeave(session.baseUrl, session.token, leave.id);
+      }
+      setSuccessMsg('Leave request cancelled successfully');
+      await loadData();
+    } catch (err: any) {
+      console.error(err);
+      setErrorMsg(err.message || 'Failed to cancel leave request');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   const handleApplySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
@@ -208,17 +277,32 @@ export default function LeavesView({ session, onBackToDashboard }: LeavesViewPro
           ? 'second_half' 
           : null;
 
-      await ApiService.createLeave(
-        session.baseUrl,
-        session.token,
-        session.userId,
-        parseInt(selectedLeaveTypeId, 10),
-        durationType === 'Multiple' ? startDate : singleDate,
-        apiDuration,
-        reason,
-        durationType === 'Multiple' ? endDate : null,
-        halfDayType
-      );
+      if (editingLeave) {
+        await ApiService.updateLeave(
+          session.baseUrl,
+          session.token,
+          editingLeave.id,
+          parseInt(selectedLeaveTypeId, 10),
+          durationType === 'Multiple' ? startDate : singleDate,
+          apiDuration,
+          reason,
+          halfDayType
+        );
+        setSuccessMsg('Leave request updated successfully');
+      } else {
+        await ApiService.createLeave(
+          session.baseUrl,
+          session.token,
+          session.userId,
+          parseInt(selectedLeaveTypeId, 10),
+          durationType === 'Multiple' ? startDate : singleDate,
+          apiDuration,
+          reason,
+          durationType === 'Multiple' ? endDate : null,
+          halfDayType
+        );
+        setSuccessMsg('Leave request submitted successfully');
+      }
 
       // Reset form
       setReason('');
@@ -226,15 +310,14 @@ export default function LeavesView({ session, onBackToDashboard }: LeavesViewPro
       setStartDate('');
       setEndDate('');
       setDurationType('Full Day');
-      
-      setSuccessMsg('Leave request submitted successfully');
+      setEditingLeave(null);
       setShowApplyForm(false);
       
       // Reload
       await loadData();
     } catch (err: any) {
       console.error(err);
-      setErrorMsg(err.message || 'Failed to submit leave request');
+      setErrorMsg(err.message || (editingLeave ? 'Failed to update leave request' : 'Failed to submit leave request'));
     } finally {
       setIsSubmitting(false);
     }
@@ -308,8 +391,12 @@ export default function LeavesView({ session, onBackToDashboard }: LeavesViewPro
         {showApplyForm || onBackToDashboard ? (
           <button
             onClick={() => {
-              if (showApplyForm) setShowApplyForm(false);
-              else if (onBackToDashboard) onBackToDashboard();
+              if (showApplyForm) {
+                setShowApplyForm(false);
+                setEditingLeave(null);
+              } else if (onBackToDashboard) {
+                onBackToDashboard();
+              }
             }}
             className="w-9 h-9 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-350 cursor-pointer active:scale-95 transition-transform"
           >
@@ -319,10 +406,10 @@ export default function LeavesView({ session, onBackToDashboard }: LeavesViewPro
 
         <div>
           <h2 className="text-xl md:text-2xl font-bold text-slate-800 dark:text-slate-100">
-            {showApplyForm ? 'Apply Leave' : 'Leaves'}
+            {showApplyForm ? (editingLeave ? 'Edit Leave Request' : 'Apply Leave') : 'Leaves'}
           </h2>
           <p className="text-xs text-slate-400 dark:text-slate-500 font-semibold mt-0.5">
-            {showApplyForm ? 'Submit a new request' : 'Track and manage your time off'}
+            {showApplyForm ? (editingLeave ? 'Update your pending request' : 'Submit a new request') : 'Track and manage your time off'}
           </p>
         </div>
       </div>
@@ -453,10 +540,10 @@ export default function LeavesView({ session, onBackToDashboard }: LeavesViewPro
             {isSubmitting ? (
               <>
                 <Loader2 className="w-4.5 h-4.5 animate-spin" />
-                SUBMITTING...
+                {editingLeave ? 'UPDATING...' : 'SUBMITTING...'}
               </>
             ) : (
-              'Submit Request'
+              editingLeave ? 'Update Request' : 'Submit Request'
             )}
           </button>
 
@@ -532,7 +619,7 @@ export default function LeavesView({ session, onBackToDashboard }: LeavesViewPro
           {/* Action Trigger Button */}
           <div className="my-2">
             <button
-              onClick={() => setShowApplyForm(true)}
+              onClick={handleOpenApply}
               className="w-full py-4 bg-primary text-white font-bold rounded-2xl text-sm tracking-wider active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-2 shadow-md shadow-primary/10"
             >
               <Plus className="w-5 h-5" />
@@ -556,6 +643,7 @@ export default function LeavesView({ session, onBackToDashboard }: LeavesViewPro
                 {groupedLeaves.map((leave, idx) => {
                   const status = leave.status || 'Pending';
                   const totalDays = parseFloat(leave.total_days || '1');
+                  const isPending = status.toLowerCase().trim() === 'pending';
 
                   return (
                     <div
@@ -563,7 +651,7 @@ export default function LeavesView({ session, onBackToDashboard }: LeavesViewPro
                       className="p-4 flex items-start gap-4 hover:bg-slate-50/40 dark:hover:bg-slate-800/10 transition-colors"
                     >
                       {/* Avatar shape */}
-                      <div className="w-10 h-10 rounded-full bg-slate-50 dark:bg-slate-950 flex items-center justify-center shrink-0 border border-slate-100/50 dark:border-slate-800 overflow-hidden">
+                      <div className="w-10 h-10 rounded-full bg-slate-50 dark:bg-slate-950 flex items-center justify-center shrink-0 border border-slate-100/50 dark:border-slate-800 overflow-hidden mt-0.5">
                         <img 
                           src={idx % 2 === 0 ? '/1.png' : '/2.png'} 
                           alt={leave.typeNameVisible} 
@@ -572,7 +660,7 @@ export default function LeavesView({ session, onBackToDashboard }: LeavesViewPro
                       </div>
 
                       {/* Details */}
-                      <div className="flex-1 flex flex-col gap-1">
+                      <div className="flex-1 flex flex-col gap-1.5">
                         <div className="flex justify-between items-start">
                           <span className="text-sm font-extrabold text-slate-800 dark:text-slate-200">
                             {leave.typeNameVisible}
@@ -582,13 +670,45 @@ export default function LeavesView({ session, onBackToDashboard }: LeavesViewPro
                           </span>
                         </div>
 
-                        <span className="text-xs text-slate-400 dark:text-slate-500 font-medium">
-                          {formatDateDisplay(leave.start_date, leave.end_date)}
-                        </span>
+                        <div className="flex justify-between items-center text-xs text-slate-400 dark:text-slate-500 font-medium">
+                          <span>{formatDateDisplay(leave.start_date, leave.end_date)}</span>
+                          <span className="font-bold text-slate-500 dark:text-slate-400">
+                            {totalDays % 1 === 0 ? totalDays.toString() : totalDays.toFixed(1)} {totalDays === 1 ? 'Day' : 'Days'}
+                          </span>
+                        </div>
 
-                        <span className="text-xs font-bold text-slate-400 dark:text-slate-600 mt-0.5">
-                          {totalDays % 1 === 0 ? totalDays.toString() : totalDays.toFixed(1)} Days
-                        </span>
+                        {leave.reason && (
+                          <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 italic bg-slate-50/50 dark:bg-slate-950/30 p-2 rounded-xl border border-slate-100/50 dark:border-slate-800/40">
+                            "{leave.reason}"
+                          </p>
+                        )}
+
+                        {/* Actions for Pending Leaves */}
+                        {isPending && (
+                          <div className="flex items-center justify-end gap-2 pt-1.5 mt-0.5 border-t border-slate-100 dark:border-slate-800/60">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEdit(leave)}
+                              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/40 rounded-xl transition-all cursor-pointer"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                              <span>Edit</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteLeave(leave)}
+                              disabled={deletingId === leave.id}
+                              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-rose-600 dark:text-rose-400 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/40 rounded-xl transition-all cursor-pointer disabled:opacity-50"
+                            >
+                              {deletingId === leave.id ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <Trash2 className="w-3.5 h-3.5" />
+                              )}
+                              <span>Cancel</span>
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   );

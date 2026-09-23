@@ -10,6 +10,18 @@ export async function POST(request: NextRequest) {
   return handleProxy(request);
 }
 
+export async function PUT(request: NextRequest) {
+  return handleProxy(request);
+}
+
+export async function PATCH(request: NextRequest) {
+  return handleProxy(request);
+}
+
+export async function DELETE(request: NextRequest) {
+  return handleProxy(request);
+}
+
 async function handleProxy(request: NextRequest) {
   try {
     const baseUrl = request.headers.get('x-base-url');
@@ -41,7 +53,7 @@ async function handleProxy(request: NextRequest) {
     
     let body: any = undefined;
 
-    if (request.method === 'POST') {
+    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method)) {
       if (contentType.includes('multipart/form-data')) {
         // Parse incoming multipart request
         const incomingFormData = await request.formData();
@@ -60,8 +72,11 @@ async function handleProxy(request: NextRequest) {
         // Notice: Do NOT set Content-Type header manually for multipart requests!
         // Fetch will automatically generate the correct boundary.
       } else {
-        headers.set('content-type', 'application/json');
-        body = await request.text();
+        const text = await request.text();
+        if (text && text.trim().length > 0) {
+          headers.set('content-type', 'application/json');
+          body = text;
+        }
       }
     }
 

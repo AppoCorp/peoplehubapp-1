@@ -37,6 +37,7 @@ export interface LeaveRecord {
   unique_id?: string;
   leave_date: string;
   duration: string;
+  half_day_type?: string;
   reason: string;
   status: string;
   leave_type_id: string;
@@ -372,6 +373,59 @@ class ApiService {
       method: 'POST',
       headers,
       body: JSON.stringify(body),
+    });
+
+    return this.handleResponse(response);
+  }
+
+  public static async updateLeave(
+    baseUrl: string,
+    token: string,
+    leaveId: number | string,
+    leaveTypeId: number,
+    leaveDate: string,
+    duration: string,
+    reason: string,
+    halfDayType?: string | null
+  ): Promise<any> {
+    const headers = this.getHeaders(baseUrl, token);
+    headers['x-target-path'] = `/api/v1/leave/${leaveId}`;
+
+    const body: Record<string, any> = {
+      type: {
+        id: leaveTypeId,
+      },
+      leave_type_id: leaveTypeId,
+      leave_date: leaveDate,
+      duration,
+      reason,
+      status: 'pending',
+    };
+
+    if (halfDayType) {
+      body.half_day_type = halfDayType;
+    }
+
+    const response = await fetch('/api/proxy', {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(body),
+    });
+
+    return this.handleResponse(response);
+  }
+
+  public static async deleteLeave(
+    baseUrl: string,
+    token: string,
+    leaveId: number | string
+  ): Promise<any> {
+    const headers = this.getHeaders(baseUrl, token);
+    headers['x-target-path'] = `/api/v1/leave/${leaveId}`;
+
+    const response = await fetch('/api/proxy', {
+      method: 'DELETE',
+      headers,
     });
 
     return this.handleResponse(response);
