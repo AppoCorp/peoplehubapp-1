@@ -35,6 +35,44 @@ export default function Home() {
     }
   }, []);
 
+  // System Hardware Back Button & Browser Navigation Sync
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const hash = window.location.hash.replace('#', '');
+    const validTabs = ['dashboard', 'attendance', 'holidays', 'leaves', 'expenses', 'profile'];
+    const initialTab = validTabs.includes(hash) ? hash : 'dashboard';
+
+    window.history.replaceState({ tab: initialTab }, '', '#' + initialTab);
+    setActiveTab(initialTab);
+
+    const handlePopState = (e: PopStateEvent) => {
+      const tab = e.state?.tab || 'dashboard';
+      setActiveTab(tab);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  const handleNavigateToTab = useCallback((tab: string) => {
+    setActiveTab(tab);
+    if (typeof window !== 'undefined') {
+      const currentTab = window.history.state?.tab;
+      if (currentTab !== tab) {
+        window.history.pushState({ tab }, '', '#' + tab);
+      }
+    }
+  }, []);
+
+  const handleBackToDashboard = useCallback(() => {
+    if (typeof window !== 'undefined' && window.history.state?.tab && window.history.state.tab !== 'dashboard') {
+      window.history.back();
+    } else {
+      handleNavigateToTab('dashboard');
+    }
+  }, [handleNavigateToTab]);
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 text-primary">
@@ -49,7 +87,7 @@ export default function Home() {
   }
 
   if (!isAuthenticated || !session) {
-    return <LoginView onLoginSuccess={() => setActiveTab('dashboard')} loginFn={login} />;
+    return <LoginView onLoginSuccess={() => handleNavigateToTab('dashboard')} loginFn={login} />;
   }
 
   const renderActiveView = () => {
@@ -59,9 +97,9 @@ export default function Home() {
       case 'holidays':
         return <HolidaysView session={session} />;
       case 'leaves':
-        return <LeavesView session={session} onBackToDashboard={() => setActiveTab('dashboard')} />;
+        return <LeavesView session={session} onBackToDashboard={handleBackToDashboard} />;
       case 'expenses':
-        return <ExpensesView session={session} onBackToDashboard={() => setActiveTab('dashboard')} />;
+        return <ExpensesView session={session} onBackToDashboard={handleBackToDashboard} />;
       case 'profile':
         return (
           <ProfileView 
@@ -70,7 +108,7 @@ export default function Home() {
           />
         );
       default:
-        return <DashboardView session={session} onNavigateToTab={setActiveTab} />;
+        return <DashboardView session={session} onNavigateToTab={handleNavigateToTab} />;
     }
   };
 
@@ -79,20 +117,20 @@ export default function Home() {
       
       <Sidebar 
         activeTab={activeTab} 
-        setActiveTab={setActiveTab} 
+        setActiveTab={handleNavigateToTab} 
         session={session} 
         onLogout={logout}
       />
 
-      {/* Main View Area */}
-      <main className="flex-1 overflow-y-auto px-4 md:px-8 pt-6 pb-24 md:pb-6 relative no-scrollbar">
+      {/* Main View Area with Safe Area Padding */}
+      <main className="flex-1 overflow-y-auto px-4 md:px-8 pt-[calc(14px+env(safe-area-inset-top,0px))] pb-28 md:pb-6 relative no-scrollbar">
         <div className="w-full max-w-3xl mx-auto">
           {renderActiveView()}
         </div>
       </main>
 
       {/* Mobile Bottom Navigation */}
-      <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} />
+      <BottomNav activeTab={activeTab} setActiveTab={handleNavigateToTab} />
     </div>
   );
 }

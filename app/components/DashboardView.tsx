@@ -338,49 +338,48 @@ export default function DashboardView({ session, onNavigateToTab }: DashboardVie
 
       {/* Dynamic Notifications Banner */}
       {notification && (
-        <div className={`fixed top-4 right-4 left-4 md:left-auto md:w-96 z-50 flex flex-col gap-2 p-4 rounded-2xl shadow-xl border transition-all duration-300 animate-in fade-in slide-in-from-top-4 ${
+        <div className={`fixed top-[calc(env(safe-area-inset-top,0px)+16px)] right-4 left-4 md:left-auto md:w-96 z-50 flex flex-col gap-2 p-3.5 rounded-2xl shadow-xl border transition-all duration-300 animate-in fade-in slide-in-from-top-4 backdrop-blur-md ${
           notification.type === 'success' 
-            ? 'bg-emerald-50 border-emerald-100 text-emerald-700 dark:bg-emerald-950/20 dark:border-emerald-900/50 dark:text-emerald-400'
-            : 'bg-rose-50 border-rose-100 text-rose-700 dark:bg-rose-950/20 dark:border-rose-900/50 dark:text-rose-400'
+            ? 'bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-950/80 dark:border-emerald-800 dark:text-emerald-200'
+            : 'bg-rose-50 border-rose-200 text-rose-800 dark:bg-rose-950/80 dark:border-rose-800 dark:text-rose-200'
         }`}>
-          <div className="flex items-start gap-2.5">
-            {notification.type === 'success' ? (
-              <CheckCircle className="w-5 h-5 shrink-0 mt-0.5" />
-            ) : (
-              <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
-            )}
-            <div className="flex-1 text-sm font-semibold leading-relaxed whitespace-pre-wrap">
-              {notification.text}
+          <div className="flex items-start justify-between gap-2.5">
+            <div className="flex items-start gap-2.5 flex-1 min-w-0">
+              {notification.type === 'success' ? (
+                <CheckCircle className="w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400 mt-0.5" />
+              ) : (
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-600 dark:text-rose-400 mt-0.5" />
+              )}
+              <div className="text-xs md:text-sm font-semibold leading-relaxed break-words">
+                {notification.text}
+              </div>
             </div>
             
-            {notification.type === 'success' && (
+            <div className="flex items-center gap-1 -mt-1 -mr-1 shrink-0">
+              {notification.type === 'error' && (
+                <button
+                  type="button"
+                  onClick={() => setShowInfoModal(true)}
+                  title="Location Help"
+                  className="p-1 rounded-lg text-rose-600 hover:text-rose-800 dark:text-rose-400 dark:hover:text-rose-200 hover:bg-rose-100/50 dark:hover:bg-rose-900/50 transition-colors cursor-pointer"
+                >
+                  <HelpCircle className="w-4 h-4" />
+                </button>
+              )}
               <button 
-                onClick={closeNotification}
-                className="p-1 rounded-lg hover:bg-emerald-100/50 dark:hover:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 transition-colors cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-
-          {notification.type === 'error' && (
-            <div className="flex justify-end gap-2 mt-2 pt-2 border-t border-rose-100/50 dark:border-rose-900/30">
-              <button
-                onClick={() => setShowInfoModal(true)}
-                title="Location Help"
-                className="p-1.5 rounded-lg bg-rose-100/60 hover:bg-rose-100 dark:bg-rose-900/40 dark:hover:bg-rose-900/60 text-rose-800 dark:text-rose-350 transition-all cursor-pointer flex items-center justify-center"
-              >
-                <HelpCircle className="w-4 h-4" />
-              </button>
-              <button 
+                type="button"
                 onClick={closeNotification}
                 title="Dismiss"
-                className="p-1.5 rounded-lg bg-rose-100/60 hover:bg-rose-100 dark:bg-rose-900/40 dark:hover:bg-rose-900/60 text-rose-800 dark:text-rose-350 transition-all cursor-pointer flex items-center justify-center"
+                className={`p-1 rounded-lg transition-colors cursor-pointer ${
+                  notification.type === 'success'
+                    ? 'text-emerald-600 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-200 hover:bg-emerald-100/50 dark:hover:bg-emerald-900/50'
+                    : 'text-rose-600 hover:text-rose-800 dark:text-rose-400 dark:hover:text-rose-200 hover:bg-rose-100/50 dark:hover:bg-rose-900/50'
+                }`}
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
-          )}
+          </div>
         </div>
       )}
 

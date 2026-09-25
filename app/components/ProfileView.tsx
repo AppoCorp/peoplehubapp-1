@@ -28,7 +28,7 @@ export default function ProfileView({ session, onLogout }: ProfileViewProps) {
   };
 
   return (
-    <div className="w-full max-w-3xl mx-auto flex flex-col gap-6 pt-10 pb-24 md:pb-6 font-sans">
+    <div className="w-full max-w-3xl mx-auto flex flex-col gap-6 pt-2 md:pt-4 pb-24 md:pb-6 font-sans">
       
       {/* Header View */}
       <div className="border-b border-slate-100 dark:border-slate-800 pb-4">

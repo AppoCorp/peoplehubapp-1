@@ -7,7 +7,8 @@ import {
   Calendar,
   Search,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  X
 } from 'lucide-react';
 import { UserSession } from '../services/api';
 import ApiService, { HolidayRecord } from '../services/api';
@@ -90,7 +91,7 @@ export default function HolidaysView({ session }: HolidaysViewProps) {
   });
 
   return (
-    <div className="w-full max-w-3xl mx-auto flex flex-col gap-6 pt-10 pb-24 md:pb-6 font-sans">
+    <div className="w-full max-w-3xl mx-auto flex flex-col gap-6 pt-2 md:pt-4 pb-24 md:pb-6 font-sans">
       
       {/* Header View */}
       <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-4">
@@ -104,6 +105,7 @@ export default function HolidaysView({ session }: HolidaysViewProps) {
         </div>
 
         <button
+          type="button"
           onClick={() => fetchHolidays(true)}
           disabled={isLoading || isRefreshing}
           className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 active:scale-95 disabled:opacity-50 transition-all cursor-pointer shadow-sm hover:shadow"
@@ -118,9 +120,18 @@ export default function HolidaysView({ session }: HolidaysViewProps) {
       </div>
 
       {errorMsg && (
-        <div className="flex gap-2 items-center p-4 bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-400 rounded-2xl text-xs border border-rose-100 dark:border-rose-900/50">
-          <AlertCircle className="w-4 h-4 shrink-0" />
-          <span>{errorMsg}</span>
+        <div className="flex items-start justify-between gap-3 p-3.5 bg-rose-50 dark:bg-rose-950/20 text-rose-700 dark:text-rose-300 rounded-2xl text-xs border border-rose-100 dark:border-rose-900/50">
+          <div className="flex items-start gap-2.5 flex-1 min-w-0">
+            <AlertCircle className="w-4 h-4 shrink-0 text-rose-600 dark:text-rose-400 mt-0.5" />
+            <span className="leading-snug break-words">{errorMsg}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setErrorMsg(null)}
+            className="p-1 -mr-1 -mt-1 rounded-lg text-rose-600 hover:text-rose-800 dark:text-rose-400 dark:hover:text-rose-200 hover:bg-rose-100/50 dark:hover:bg-rose-900/50 transition-colors cursor-pointer shrink-0"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
       )}
 

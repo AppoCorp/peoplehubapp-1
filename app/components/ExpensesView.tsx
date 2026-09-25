@@ -360,27 +360,64 @@ export default function ExpensesView({ session, onBackToDashboard }: ExpensesVie
     return '₹ INR';
   };
 
+  // Sync sub-form with browser/hardware back button
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleSubPopState = () => {
+      if (showApplyForm) {
+        setShowApplyForm(false);
+      }
+    };
+
+    window.addEventListener('popstate', handleSubPopState);
+    return () => window.removeEventListener('popstate', handleSubPopState);
+  }, [showApplyForm]);
+
+  const handleOpenApply = () => {
+    setShowApplyForm(true);
+    if (typeof window !== 'undefined') {
+      window.history.pushState({ tab: 'expenses', form: 'add' }, '', '#add-expense');
+    }
+  };
+
   // Stats calculation
   const pendingCount = expenses.filter((e) => e.status?.toLowerCase() === 'pending').length;
   const totalClaims = expenses.length;
 
   return (
-    <div className="w-full max-w-3xl mx-auto flex flex-col gap-6 pt-10 pb-24 md:pb-6 font-sans">
+    <div className="w-full max-w-3xl mx-auto flex flex-col gap-6 pt-2 md:pt-4 pb-24 md:pb-6 font-sans">
       
       {/* Dynamic Notifications */}
       {successMsg && (
-        <div className="fixed top-4 right-4 z-50 flex items-center gap-2.5 px-4 py-3 rounded-2xl shadow-lg border bg-emerald-50 border-emerald-100 text-emerald-750 dark:bg-emerald-950/20 dark:border-emerald-900/50 dark:text-emerald-400 text-sm font-semibold transition-all duration-300">
-          <CheckCircle2 className="w-4 h-4 shrink-0" />
-          <span>{successMsg}</span>
-          <button onClick={() => setSuccessMsg(null)} className="ml-2 font-bold cursor-pointer text-emerald-450 hover:text-emerald-605">×</button>
+        <div className="fixed top-[calc(env(safe-area-inset-top,0px)+16px)] left-4 right-4 md:left-auto md:right-6 md:max-w-md z-50 flex items-start justify-between gap-3 p-3.5 rounded-2xl shadow-xl border bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-950/80 dark:border-emerald-800 dark:text-emerald-200 text-xs md:text-sm font-semibold transition-all duration-300 animate-in fade-in slide-in-from-top-4 backdrop-blur-md">
+          <div className="flex items-start gap-2.5 flex-1 min-w-0">
+            <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400 mt-0.5" />
+            <span className="leading-snug break-words">{successMsg}</span>
+          </div>
+          <button 
+            type="button"
+            onClick={() => setSuccessMsg(null)} 
+            className="p-1 -mr-1 -mt-1 rounded-lg text-emerald-600 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-200 hover:bg-emerald-100/50 dark:hover:bg-emerald-900/50 transition-colors cursor-pointer shrink-0"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
       )}
 
       {errorMsg && (
-        <div className="fixed top-4 right-4 z-50 flex items-center gap-2.5 px-4 py-3 rounded-2xl shadow-lg border bg-rose-50 border-rose-100 text-rose-750 dark:bg-rose-950/20 dark:border-rose-900/50 dark:text-rose-400 text-sm font-semibold transition-all duration-300">
-          <AlertCircle className="w-4 h-4 shrink-0" />
-          <span>{errorMsg}</span>
-          <button onClick={() => setErrorMsg(null)} className="ml-2 font-bold cursor-pointer text-rose-450 hover:text-rose-605">×</button>
+        <div className="fixed top-[calc(env(safe-area-inset-top,0px)+16px)] left-4 right-4 md:left-auto md:right-6 md:max-w-md z-50 flex items-start justify-between gap-3 p-3.5 rounded-2xl shadow-xl border bg-rose-50 border-rose-200 text-rose-800 dark:bg-rose-950/80 dark:border-rose-800 dark:text-rose-200 text-xs md:text-sm font-semibold transition-all duration-300 animate-in fade-in slide-in-from-top-4 backdrop-blur-md">
+          <div className="flex items-start gap-2.5 flex-1 min-w-0">
+            <AlertCircle className="w-4 h-4 shrink-0 text-rose-600 dark:text-rose-400 mt-0.5" />
+            <span className="leading-snug break-words">{errorMsg}</span>
+          </div>
+          <button 
+            type="button"
+            onClick={() => setErrorMsg(null)} 
+            className="p-1 -mr-1 -mt-1 rounded-lg text-rose-600 hover:text-rose-800 dark:text-rose-400 dark:hover:text-rose-200 hover:bg-rose-100/50 dark:hover:bg-rose-900/50 transition-colors cursor-pointer shrink-0"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
       )}
 
@@ -388,9 +425,17 @@ export default function ExpensesView({ session, onBackToDashboard }: ExpensesVie
       <div className="flex items-center gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
         {showApplyForm || onBackToDashboard ? (
           <button
+            type="button"
             onClick={() => {
-              if (showApplyForm) setShowApplyForm(false);
-              else if (onBackToDashboard) onBackToDashboard();
+              if (showApplyForm) {
+                if (typeof window !== 'undefined' && window.history.state?.form) {
+                  window.history.back();
+                } else {
+                  setShowApplyForm(false);
+                }
+              } else if (onBackToDashboard) {
+                onBackToDashboard();
+              }
             }}
             className="w-9 h-9 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-350 cursor-pointer active:scale-95 transition-transform"
           >
@@ -777,7 +822,8 @@ export default function ExpensesView({ session, onBackToDashboard }: ExpensesVie
           {/* Float Action Trigger */}
           <div className="my-2">
             <button
-              onClick={() => setShowApplyForm(true)}
+              type="button"
+              onClick={handleOpenApply}
               className="w-full py-4 bg-primary text-white font-bold rounded-2xl text-sm tracking-wider active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-2 shadow-md shadow-primary/10"
             >
               <Plus className="w-5 h-5" />
