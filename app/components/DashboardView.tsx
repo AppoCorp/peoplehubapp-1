@@ -14,7 +14,8 @@ import {
   HelpCircle,
   AlertCircle,
   X,
-  Info
+  Info,
+  Home
 } from 'lucide-react';
 import { UserSession } from '../services/api';
 import ApiService, { AttendanceRecord } from '../services/api';
@@ -87,9 +88,6 @@ export default function DashboardView({ session, onNavigateToTab }: DashboardVie
       setRemainingClockIn(remaining);
       setShowWorkingFrom(showWF);
       setWorkingFromLocations(locations);
-      if (locations.length > 0) {
-        setSelectedWorkingFrom((prev) => (prev && locations.includes(prev) ? prev : locations[0]));
-      }
       
       const clockedIn = record !== null && 
         (!record.clock_out_time || 
@@ -125,9 +123,6 @@ export default function DashboardView({ session, onNavigateToTab }: DashboardVie
         setRemainingClockIn(remaining);
         setShowWorkingFrom(showWF);
         setWorkingFromLocations(locations);
-        if (locations.length > 0) {
-          setSelectedWorkingFrom((prev) => (prev && locations.includes(prev) ? prev : locations[0]));
-        }
         
         const clockedIn = record !== null && 
           (!record.clock_out_time || 
@@ -205,6 +200,7 @@ export default function DashboardView({ session, onNavigateToTab }: DashboardVie
 
   const handleClockInClick = () => {
     if (showWorkingFrom && workingFromLocations.length > 0) {
+      setSelectedWorkingFrom('');
       setShowLocationModal(true);
     } else {
       executeClockIn();
@@ -212,6 +208,12 @@ export default function DashboardView({ session, onNavigateToTab }: DashboardVie
   };
 
   const executeClockIn = async (locationToUse?: string) => {
+    const chosenLoc = locationToUse || selectedWorkingFrom;
+    if (showWorkingFrom && workingFromLocations.length > 0 && !chosenLoc) {
+      showNotification('Please select a location to clock in', 'warning');
+      return;
+    }
+
     setIsSubmitting(true);
     setIsLocationLoading(true);
     let latStr = '';
@@ -234,18 +236,19 @@ export default function DashboardView({ session, onNavigateToTab }: DashboardVie
     }
 
     try {
-      const targetLocation = locationToUse || selectedWorkingFrom || (workingFromLocations.length > 0 ? workingFromLocations[0] : undefined);
-      const workFromType = workingFromLocations.length > 0 ? 'other' : targetLocation;
+      const targetLocation = showWorkingFrom ? chosenLoc : undefined;
+      const workFromType = showWorkingFrom ? (workingFromLocations.length > 0 ? 'other' : targetLocation) : undefined;
       await ApiService.checkIn(
         session.baseUrl,
         session.token,
         latStr || undefined,
         lngStr || undefined,
-        showWorkingFrom ? targetLocation : undefined,
-        showWorkingFrom ? workFromType : undefined
+        targetLocation,
+        workFromType
       );
       await fetchAttendanceStatus();
       setShowLocationModal(false);
+      setSelectedWorkingFrom('');
       showNotification('Clocked in successfully', 'success');
     } catch (err: any) {
       showNotification(err.message || 'Clock-in failed', 'error');
@@ -467,6 +470,7 @@ export default function DashboardView({ session, onNavigateToTab }: DashboardVie
             <div className="flex flex-col gap-2.5 max-h-60 overflow-y-auto py-1">
               {workingFromLocations.map((loc) => {
                 const isSelected = selectedWorkingFrom === loc;
+                const isHome = loc.toLowerCase().includes('home');
                 return (
                   <button
                     key={loc}
@@ -475,7 +479,7 @@ export default function DashboardView({ session, onNavigateToTab }: DashboardVie
                     onClick={() => setSelectedWorkingFrom(loc)}
                     className={`flex items-center justify-between p-3.5 rounded-2xl border transition-all cursor-pointer text-left ${
                       isSelected
-                        ? 'border-indigo-600 bg-indigo-50/70 dark:bg-indigo-950/30 dark:border-indigo-500 shadow-sm'
+                        ? 'border-indigo-600 bg-indigo-50/70 dark:bg-indigo-950/30 dark:border-indigo-500 shadow-sm ring-2 ring-indigo-500/20'
                         : 'border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/30 hover:border-slate-300 dark:hover:border-slate-700'
                     }`}
                   >
@@ -485,7 +489,7 @@ export default function DashboardView({ session, onNavigateToTab }: DashboardVie
                           ? 'bg-indigo-600 text-white shadow-sm' 
                           : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200/60 dark:border-slate-700'
                       }`}>
-                        <Building2 className="w-4 h-4" />
+                        {isHome ? <Home className="w-4 h-4" /> : <Building2 className="w-4 h-4" />}
                       </div>
                       <span className={`text-sm font-bold ${
                         isSelected 
@@ -504,25 +508,21 @@ export default function DashboardView({ session, onNavigateToTab }: DashboardVie
             </div>
 
             {/* Modal Actions */}
-            <div className="flex gap-2.5 pt-2">
-              <button
-                type="button"
-                disabled={isSubmitting}
-                onClick={() => setShowLocationModal(false)}
-                className="flex-1 py-3.5 px-4 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold rounded-2xl text-xs transition-all cursor-pointer disabled:opacity-50"
-              >
-                Cancel
-              </button>
+            <div className="pt-2">
               <button
                 type="button"
                 disabled={isSubmitting || !selectedWorkingFrom}
                 onClick={() => executeClockIn(selectedWorkingFrom)}
-                className="flex-[2] py-3.5 px-4 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-2xl text-xs tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm shadow-emerald-200 dark:shadow-none disabled:opacity-50"
+                className={`w-full py-4 px-4 font-extrabold rounded-2xl text-xs tracking-wider uppercase transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                  selectedWorkingFrom && !isSubmitting
+                    ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/25 active:scale-[0.99]'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed shadow-none border border-slate-200/60 dark:border-slate-800'
+                }`}
               >
                 {isSubmitting ? (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>{isLocationLoading ? 'VERIFYING...' : 'CLOCKING IN...'}</span>
+                    <Loader2 className="w-4 h-4 animate-spin text-white" />
+                    <span>{isLocationLoading ? 'VERIFYING LOCATION...' : 'CLOCKING IN...'}</span>
                   </>
                 ) : (
                   <span>CONFIRM & CLOCK IN</span>
