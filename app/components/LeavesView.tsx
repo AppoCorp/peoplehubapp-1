@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   CalendarDays, 
   Plus, 
@@ -16,10 +16,13 @@ import {
   Heart,
   FileText,
   Pencil,
-  Trash2
+  Trash2,
+  Paperclip,
+  UploadCloud,
+  X
 } from 'lucide-react';
 import { UserSession } from '../services/api';
-import ApiService, { LeaveRecord, LeaveType } from '../services/api';
+import ApiService, { LeaveRecord, LeaveType, CompOffRecord } from '../services/api';
 
 interface LeavesViewProps {
   session: UserSession;
@@ -29,15 +32,19 @@ interface LeavesViewProps {
 export default function LeavesView({ session, onBackToDashboard }: LeavesViewProps) {
   const [leaves, setLeaves] = useState<LeaveRecord[]>([]);
   const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
+  const [compOffRequests, setCompOffRequests] = useState<CompOffRecord[]>([]);
+  const [activeTab, setActiveTab] = useState<'leaves' | 'comp-off'>('leaves');
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showApplyForm, setShowApplyForm] = useState(false);
+  const [showCompOffForm, setShowCompOffForm] = useState(false);
   const [editingLeave, setEditingLeave] = useState<any | null>(null);
   const [deletingId, setDeletingId] = useState<number | string | null>(null);
+  const [deletingCompOffId, setDeletingCompOffId] = useState<number | string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  // Form State
+  // Leave Form State
   const [selectedLeaveTypeId, setSelectedLeaveTypeId] = useState<string>('');
   const [durationType, setDurationType] = useState<'Full Day' | 'Multiple' | 'First Half' | 'Second Half'>('Full Day');
   const [singleDate, setSingleDate] = useState('');
@@ -45,21 +52,58 @@ export default function LeavesView({ session, onBackToDashboard }: LeavesViewPro
   const [endDate, setEndDate] = useState('');
   const [reason, setReason] = useState('');
 
+  // Comp Off Form State
+  const [compOffLeaveTypeId, setCompOffLeaveTypeId] = useState<string>('');
+  const [compOffDuration, setCompOffDuration] = useState<'single' | 'multiple' | 'first_half' | 'second_half'>('single');
+  const [compOffDateWorked, setCompOffDateWorked] = useState('');
+  const [compOffStartDateWorked, setCompOffStartDateWorked] = useState('');
+  const [compOffEndDateWorked, setCompOffEndDateWorked] = useState('');
+  const [compOffReason, setCompOffReason] = useState('');
+  const [compOffFile, setCompOffFile] = useState<File | null>(null);
+  const compOffFileInputRef = useRef<HTMLInputElement>(null);
+
+  const todayStr = new Date().toISOString().split('T')[0];
+
+  const isEarnedCompOffType = (type: LeaveType) => {
+    const typeName = (type.type_name || '').toLowerCase();
+    const leavetype = (type.leavetype || '').toLowerCase();
+    return (
+      leavetype === 'earned' ||
+      leavetype === 'comp_off' ||
+      typeName.includes('comp off') ||
+      typeName.includes('comp-off') ||
+      typeName.includes('com-off') ||
+      typeName.includes('com off') ||
+      typeName.includes('earned')
+    );
+  };
+
   const loadData = async (silent = false) => {
     if (!silent) setIsLoading(true);
     setErrorMsg(null);
     try {
-      const fetchedLeaves = await ApiService.getLeaves(session.baseUrl, session.token, session.userId);
-      const fetchedTypes = await ApiService.getLeaveTypes(session.baseUrl, session.token);
+      const [fetchedLeaves, fetchedTypes, fetchedCompOffs] = await Promise.all([
+        ApiService.getLeaves(session.baseUrl, session.token, session.userId),
+        ApiService.getLeaveTypes(session.baseUrl, session.token),
+        ApiService.getCompOffRequests(session.baseUrl, session.token, session.userId).catch(() => []),
+      ]);
       
       setLeaves(fetchedLeaves);
       setLeaveTypes(fetchedTypes);
+      setCompOffRequests(fetchedCompOffs || []);
       
       localStorage.setItem('ph_cache_leaves', JSON.stringify(fetchedLeaves));
       localStorage.setItem('ph_cache_leave_types', JSON.stringify(fetchedTypes));
+      localStorage.setItem('ph_cache_comp_offs', JSON.stringify(fetchedCompOffs || []));
       
       if (fetchedTypes.length > 0) {
         setSelectedLeaveTypeId(fetchedTypes[0].id.toString());
+        const compOffType = fetchedTypes.find(isEarnedCompOffType);
+        if (compOffType) {
+          setCompOffLeaveTypeId(compOffType.id.toString());
+        } else {
+          setCompOffLeaveTypeId(fetchedTypes[0].id.toString());
+        }
       }
     } catch (err: any) {
       console.error(err);
@@ -72,14 +116,22 @@ export default function LeavesView({ session, onBackToDashboard }: LeavesViewPro
   useEffect(() => {
     const cachedLeaves = localStorage.getItem('ph_cache_leaves');
     const cachedTypes = localStorage.getItem('ph_cache_leave_types');
+    const cachedCompOffs = localStorage.getItem('ph_cache_comp_offs');
     if (cachedLeaves && cachedTypes) {
       try {
         const leavesData = JSON.parse(cachedLeaves);
         const typesData = JSON.parse(cachedTypes);
         setLeaves(leavesData);
         setLeaveTypes(typesData);
+        if (cachedCompOffs) {
+          setCompOffRequests(JSON.parse(cachedCompOffs));
+        }
         if (typesData.length > 0) {
           setSelectedLeaveTypeId(typesData[0].id.toString());
+          const compOffType = typesData.find(isEarnedCompOffType);
+          if (compOffType) {
+            setCompOffLeaveTypeId(compOffType.id.toString());
+          }
         }
         setIsLoading(false);
       } catch (e) {
@@ -202,6 +254,7 @@ export default function LeavesView({ session, onBackToDashboard }: LeavesViewPro
   };
 
   const handleOpenApply = () => {
+    setShowCompOffForm(false);
     setEditingLeave(null);
     setReason('');
     setSingleDate('');
@@ -214,7 +267,30 @@ export default function LeavesView({ session, onBackToDashboard }: LeavesViewPro
     setShowApplyForm(true);
   };
 
+  const handleOpenCompOff = () => {
+    setShowApplyForm(false);
+    setEditingLeave(null);
+    setCompOffReason('');
+    setCompOffDateWorked('');
+    setCompOffStartDateWorked('');
+    setCompOffEndDateWorked('');
+    setCompOffDuration('single');
+    setCompOffFile(null);
+    if (compOffFileInputRef.current) {
+      compOffFileInputRef.current.value = '';
+    }
+
+    const earnedTypes = leaveTypes.filter(isEarnedCompOffType);
+    if (earnedTypes.length > 0) {
+      setCompOffLeaveTypeId(earnedTypes[0].id.toString());
+    } else if (leaveTypes.length > 0) {
+      setCompOffLeaveTypeId(leaveTypes[0].id.toString());
+    }
+    setShowCompOffForm(true);
+  };
+
   const handleOpenEdit = (leave: any) => {
+    setShowCompOffForm(false);
     setEditingLeave(leave);
     setSelectedLeaveTypeId(leave.leave_type_id ? leave.leave_type_id.toString() : (leaveTypes[0]?.id?.toString() || ''));
     setReason(leave.reason || '');
@@ -261,12 +337,33 @@ export default function LeavesView({ session, onBackToDashboard }: LeavesViewPro
         await ApiService.deleteLeave(session.baseUrl, session.token, leave.id);
       }
       setSuccessMsg('Leave request cancelled successfully');
-      await loadData();
+      await loadData(true);
     } catch (err: any) {
       console.error(err);
       setErrorMsg(err.message || 'Failed to cancel leave request');
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  const handleDeleteCompOff = async (compOffId: number | string) => {
+    if (!window.confirm('Are you sure you want to cancel this comp off request?')) {
+      return;
+    }
+
+    setDeletingCompOffId(compOffId);
+    setErrorMsg(null);
+    setSuccessMsg(null);
+
+    try {
+      await ApiService.deleteCompOffRequest(session.baseUrl, session.token, compOffId);
+      setSuccessMsg('Comp Off request cancelled successfully');
+      await loadData(true);
+    } catch (err: any) {
+      console.error(err);
+      setErrorMsg(err.message || 'Failed to cancel comp off request');
+    } finally {
+      setDeletingCompOffId(null);
     }
   };
 
@@ -346,7 +443,7 @@ export default function LeavesView({ session, onBackToDashboard }: LeavesViewPro
       setShowApplyForm(false);
       
       // Reload
-      await loadData();
+      await loadData(true);
     } catch (err: any) {
       console.error(err);
       setErrorMsg(err.message || (editingLeave ? 'Failed to update leave request' : 'Failed to submit leave request'));
@@ -355,15 +452,80 @@ export default function LeavesView({ session, onBackToDashboard }: LeavesViewPro
     }
   };
 
-  const formatDateDisplay = (startStr: string, endStr: string) => {
+  const handleCompOffSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg(null);
+    setSuccessMsg(null);
+
+    const dateWorked = compOffDuration === 'multiple' ? compOffStartDateWorked : compOffDateWorked;
+    if (!compOffLeaveTypeId || !dateWorked || !compOffReason.trim()) {
+      setErrorMsg('Please fill in all required fields');
+      return;
+    }
+    if (compOffDuration === 'multiple' && !compOffEndDateWorked) {
+      setErrorMsg('Please select an end date');
+      return;
+    }
+
+    if (compOffDuration === 'multiple' && compOffStartDateWorked > compOffEndDateWorked) {
+      setErrorMsg('Start date cannot be after end date');
+      return;
+    }
+
+    if (dateWorked > todayStr || (compOffDuration === 'multiple' && compOffEndDateWorked > todayStr)) {
+      setErrorMsg('Comp Off can only be requested for past or current dates worked.');
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      await ApiService.createCompOffRequest(
+        session.baseUrl,
+        session.token,
+        session.userId,
+        parseInt(compOffLeaveTypeId, 10),
+        compOffDuration,
+        dateWorked,
+        compOffReason.trim(),
+        compOffDuration === 'multiple' ? compOffEndDateWorked : null,
+        compOffFile
+      );
+
+      setSuccessMsg('Comp Off request submitted successfully');
+
+      // Reset form
+      setCompOffReason('');
+      setCompOffDateWorked('');
+      setCompOffStartDateWorked('');
+      setCompOffEndDateWorked('');
+      setCompOffDuration('single');
+      setCompOffFile(null);
+      setShowCompOffForm(false);
+      if (compOffFileInputRef.current) {
+        compOffFileInputRef.current.value = '';
+      }
+
+      await loadData(true);
+    } catch (err: any) {
+      console.error(err);
+      setErrorMsg(err.message || 'Failed to submit comp off request');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const formatDateDisplay = (startStr: string, endStr?: string | null) => {
     try {
       const start = new Date(startStr);
-      const end = new Date(endStr);
       if (isNaN(start.getTime())) return startStr;
 
-      if (startStr === endStr) {
+      if (!endStr || startStr === endStr) {
         return start.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
       }
+
+      const end = new Date(endStr);
+      if (isNaN(end.getTime())) return startStr;
 
       if (start.getFullYear() === end.getFullYear()) {
         return `${start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
@@ -376,27 +538,16 @@ export default function LeavesView({ session, onBackToDashboard }: LeavesViewPro
   };
 
   const getStatusColor = (status: string) => {
-    const cleanStatus = status.toLowerCase().trim();
+    const cleanStatus = (status || '').toLowerCase().trim();
     if (cleanStatus === 'approved') return 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-400 border-emerald-100 dark:border-emerald-900/40';
     if (cleanStatus === 'rejected') return 'bg-rose-50 text-rose-700 dark:bg-rose-950/20 dark:text-rose-400 border-rose-100 dark:border-rose-900/40';
     return 'bg-amber-50 text-amber-700 dark:bg-amber-950/20 dark:text-amber-400 border-amber-100 dark:border-amber-900/40';
   };
 
-  const getLeaveIcon = (name: string, color: string) => {
-    const cleanName = name.toLowerCase();
-    let IconComponent = CalendarIcon;
-    if (cleanName.includes('sick') || cleanName.includes('medical')) {
-      IconComponent = Heart;
-    } else if (cleanName.includes('casual')) {
-      IconComponent = CalendarDays;
-    } else if (cleanName.includes('annual') || cleanName.includes('holiday')) {
-      IconComponent = Umbrella;
-    }
-    return <IconComponent className="w-5 h-5" style={{ color }} />;
-  };
-
   const balances = getLeaveBalances();
   const groupedLeaves = getGroupedLeaves();
+  const earnedCompOffLeaveTypes = leaveTypes.filter(isEarnedCompOffType);
+  const compOffTypesForDropdown = earnedCompOffLeaveTypes.length > 0 ? earnedCompOffLeaveTypes : leaveTypes;
 
   return (
     <div className="w-full max-w-3xl mx-auto flex flex-col gap-6 pt-10 pb-24 md:pb-6 font-sans">
@@ -420,12 +571,14 @@ export default function LeavesView({ session, onBackToDashboard }: LeavesViewPro
 
       {/* Header Bar */}
       <div className="flex items-center gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
-        {showApplyForm || onBackToDashboard ? (
+        {showApplyForm || showCompOffForm || onBackToDashboard ? (
           <button
             onClick={() => {
               if (showApplyForm) {
                 setShowApplyForm(false);
                 setEditingLeave(null);
+              } else if (showCompOffForm) {
+                setShowCompOffForm(false);
               } else if (onBackToDashboard) {
                 onBackToDashboard();
               }
@@ -438,10 +591,18 @@ export default function LeavesView({ session, onBackToDashboard }: LeavesViewPro
 
         <div>
           <h2 className="text-xl md:text-2xl font-bold text-slate-800 dark:text-slate-100">
-            {showApplyForm ? (editingLeave ? 'Edit Leave Request' : 'Apply Leave') : 'Leaves'}
+            {showApplyForm 
+              ? (editingLeave ? 'Edit Leave Request' : 'Apply Leave') 
+              : showCompOffForm 
+                ? 'Create Comp Off Request' 
+                : 'Leaves'}
           </h2>
           <p className="text-xs text-slate-400 dark:text-slate-500 font-semibold mt-0.5">
-            {showApplyForm ? (editingLeave ? 'Update your pending request' : 'Submit a new request') : 'Track and manage your time off'}
+            {showApplyForm 
+              ? (editingLeave ? 'Update your pending request' : 'Submit a new leave request') 
+              : showCompOffForm 
+                ? 'Claim comp off for working on a weekend or holiday' 
+                : 'Track and manage your time off'}
           </p>
         </div>
       </div>
@@ -581,6 +742,183 @@ export default function LeavesView({ session, onBackToDashboard }: LeavesViewPro
 
         </form>
 
+      ) : showCompOffForm ? (
+
+        /* Comp Off Form Content */
+        <form onSubmit={handleCompOffSubmit} className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-100 dark:border-slate-800/60 shadow-sm flex flex-col gap-5">
+          
+          {/* Leave Type Select (Earned / Comp Off only) */}
+          <div className="flex flex-col gap-2">
+            <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+              Leave Type
+            </label>
+            <select
+              value={compOffLeaveTypeId}
+              onChange={(e) => setCompOffLeaveTypeId(e.target.value)}
+              className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent dark:text-slate-200"
+            >
+              {compOffTypesForDropdown.map((type) => (
+                <option key={type.id} value={type.id}>
+                  {type.type_name} {type.comp_off_expiry_after ? `(Expires in ${type.comp_off_expiry_after} ${type.comp_off_expiry_type || 'days'})` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Duration Type selector */}
+          <div className="flex flex-col gap-2">
+            <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+              Duration Type
+            </label>
+            <div className="grid grid-cols-4 gap-1 bg-slate-50 dark:bg-slate-950 p-1 rounded-xl border border-slate-100 dark:border-slate-800">
+              {[
+                { label: 'Full Day', val: 'single' },
+                { label: 'Multiple', val: 'multiple' },
+                { label: 'First Half', val: 'first_half' },
+                { label: 'Second Half', val: 'second_half' }
+              ].map((opt) => {
+                const isSelected = compOffDuration === opt.val;
+                return (
+                  <button
+                    key={opt.val}
+                    type="button"
+                    onClick={() => setCompOffDuration(opt.val as any)}
+                    className={`py-2 rounded-lg text-[9px] font-bold text-center transition-all ${
+                      isSelected
+                        ? 'bg-white dark:bg-slate-800 text-primary shadow-sm border border-slate-100/50 dark:border-slate-800'
+                        : 'text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-350 cursor-pointer'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Date Picker Fields */}
+          {compOffDuration === 'multiple' ? (
+            <div className="grid grid-cols-2 gap-4">
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                  Start Date Worked
+                </label>
+                <input
+                  type="date"
+                  required
+                  max={todayStr}
+                  value={compOffStartDateWorked}
+                  onChange={(e) => setCompOffStartDateWorked(e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent dark:text-slate-200"
+                />
+              </div>
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                  End Date Worked
+                </label>
+                <input
+                  type="date"
+                  required
+                  max={todayStr}
+                  value={compOffEndDateWorked}
+                  onChange={(e) => setCompOffEndDateWorked(e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent dark:text-slate-200"
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                Date Worked
+              </label>
+              <input
+                type="date"
+                required
+                max={todayStr}
+                value={compOffDateWorked}
+                onChange={(e) => setCompOffDateWorked(e.target.value)}
+                className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent dark:text-slate-200"
+              />
+            </div>
+          )}
+
+          {/* Reason Textarea */}
+          <div className="flex flex-col gap-2">
+            <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+              Reason / Work Done
+            </label>
+            <textarea
+              required
+              rows={4}
+              value={compOffReason}
+              onChange={(e) => setCompOffReason(e.target.value)}
+              placeholder="Describe the work done or reason for comp off..."
+              className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent dark:text-slate-200 resize-none"
+            />
+          </div>
+
+          {/* File Upload */}
+          <div className="flex flex-col gap-2">
+            <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+              Attachment (Optional)
+            </label>
+            <input
+              type="file"
+              ref={compOffFileInputRef}
+              onChange={(e) => {
+                if (e.target.files && e.target.files[0]) {
+                  setCompOffFile(e.target.files[0]);
+                }
+              }}
+              className="hidden"
+            />
+            {compOffFile ? (
+              <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-xs text-slate-700 dark:text-slate-300">
+                <div className="flex items-center gap-2 truncate">
+                  <Paperclip className="w-4 h-4 text-primary shrink-0" />
+                  <span className="truncate">{compOffFile.name}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCompOffFile(null);
+                    if (compOffFileInputRef.current) compOffFileInputRef.current.value = '';
+                  }}
+                  className="text-rose-500 hover:text-rose-700 p-1"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => compOffFileInputRef.current?.click()}
+                className="flex items-center justify-center gap-2 py-3 px-4 border border-dashed border-slate-300 dark:border-slate-700 hover:border-primary rounded-2xl text-xs font-semibold text-slate-500 dark:text-slate-400 transition-colors"
+              >
+                <UploadCloud className="w-4 h-4 text-slate-400" />
+                <span>Upload supporting document / screenshot</span>
+              </button>
+            )}
+          </div>
+
+          {/* Submit Button */}
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="w-full py-4 bg-primary hover:bg-primary-hover text-white font-bold rounded-2xl text-sm tracking-wider active:scale-[0.98] disabled:opacity-50 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-primary/10 mt-2"
+          >
+            {isSubmitting ? (
+              <>
+                <Loader2 className="w-4.5 h-4.5 animate-spin" />
+                <span>SUBMITTING...</span>
+              </>
+            ) : (
+              <span>Submit Comp Off Request</span>
+            )}
+          </button>
+
+        </form>
+
       ) : (
         
         /* Main Dashboard view */
@@ -648,110 +986,227 @@ export default function LeavesView({ session, onBackToDashboard }: LeavesViewPro
             )}
           </div>
 
-          {/* Action Trigger Button */}
-          <div className="my-2">
+          {/* Action Trigger Buttons: Divided into 2 equal halves */}
+          <div className="grid grid-cols-2 gap-3 my-2">
             <button
               onClick={handleOpenApply}
-              className="w-full py-4 bg-primary text-white font-bold rounded-2xl text-sm tracking-wider active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-2 shadow-md shadow-primary/10"
+              className="w-full py-4 bg-primary hover:bg-primary-hover text-white font-bold rounded-2xl text-xs md:text-sm tracking-wide active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-md shadow-primary/10"
             >
-              <Plus className="w-5 h-5" />
-              <span>Apply For Leave</span>
+              <Plus className="w-4.5 h-4.5 shrink-0" />
+              <span className="truncate">Apply For Leave</span>
+            </button>
+            <button
+              onClick={handleOpenCompOff}
+              className="w-full py-4 bg-primary hover:bg-primary-hover text-white font-bold rounded-2xl text-xs md:text-sm tracking-wide active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-md shadow-primary/10"
+            >
+              <Plus className="w-4.5 h-4.5 shrink-0" />
+              <span className="truncate">Create Comp Off</span>
             </button>
           </div>
 
-          {/* Past Leaves Lists */}
+          {/* History Sub-Tabs (Leaves vs Comp Off Requests) */}
           <div className="flex flex-col gap-3">
-            <h3 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider px-1">
-              Past Leaves
-            </h3>
-
-            {groupedLeaves.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16 text-slate-400 bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800/60 shadow-sm">
-                <FileText className="w-10 h-10 stroke-[1.5] text-slate-300 dark:text-slate-700" />
-                <h3 className="text-xs font-bold text-slate-500 mt-2">No leave history</h3>
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800/80 pb-2">
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('leaves')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    activeTab === 'leaves'
+                      ? 'bg-primary text-white shadow-sm'
+                      : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
+                  }`}
+                >
+                  Past Leaves ({groupedLeaves.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('comp-off')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    activeTab === 'comp-off'
+                      ? 'bg-primary text-white shadow-sm'
+                      : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
+                  }`}
+                >
+                  Comp Off Requests ({compOffRequests.length})
+                </button>
               </div>
-            ) : (
-              <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800/80 overflow-hidden shadow-sm divide-y divide-slate-100 dark:divide-slate-800/80">
-                {groupedLeaves.map((leave, idx) => {
-                  const status = leave.status || 'Pending';
-                  const totalDays = parseFloat(leave.total_days || '1');
-                  const isPending = status.toLowerCase().trim() === 'pending';
+            </div>
 
-                  return (
-                    <div
-                      key={leave.id || idx}
-                      className="p-4 flex items-start gap-4 hover:bg-slate-50/40 dark:hover:bg-slate-800/10 transition-colors"
-                    >
-                      {/* Left Column: Avatar + Action Icons */}
-                      <div className="flex flex-col items-center shrink-0">
-                        <div className="w-10 h-10 rounded-full bg-slate-50 dark:bg-slate-950 flex items-center justify-center border border-slate-100/50 dark:border-slate-800 overflow-hidden mt-0.5">
-                          <img 
-                            src={idx % 2 === 0 ? '/1.png' : '/2.png'} 
-                            alt={leave.typeNameVisible} 
-                            className="w-8 h-8 object-contain" 
-                          />
-                        </div>
+            {activeTab === 'leaves' ? (
+              groupedLeaves.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-slate-400 bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800/60 shadow-sm">
+                  <FileText className="w-10 h-10 stroke-[1.5] text-slate-300 dark:text-slate-700" />
+                  <h3 className="text-xs font-bold text-slate-500 mt-2">No leave history</h3>
+                </div>
+              ) : (
+                <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800/80 overflow-hidden shadow-sm divide-y divide-slate-100 dark:divide-slate-800/80">
+                  {groupedLeaves.map((leave, idx) => {
+                    const status = leave.status || 'Pending';
+                    const totalDays = parseFloat(leave.total_days || '1');
+                    const isPending = status.toLowerCase().trim() === 'pending';
 
-                        {/* Actions for Pending Leaves on extreme left */}
-                        {isPending && (
-                          <div className="flex items-center justify-center gap-1 mt-2.5">
-                            <button
-                              type="button"
-                              title="Edit Leave"
-                              onClick={() => handleOpenEdit(leave)}
-                              className="p-1.5 text-amber-500 hover:text-amber-600 dark:text-amber-400 dark:hover:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/50 rounded-lg transition-colors cursor-pointer"
-                            >
-                              <Pencil className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              title="Cancel Leave"
-                              onClick={() => handleDeleteLeave(leave)}
-                              disabled={deletingId === leave.id}
-                              className="p-1.5 text-rose-500 hover:text-rose-600 dark:text-rose-400 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
-                            >
-                              {deletingId === leave.id ? (
-                                <Loader2 className="w-3.5 h-3.5 animate-spin text-rose-500" />
-                              ) : (
-                                <Trash2 className="w-3.5 h-3.5" />
-                              )}
-                            </button>
+                    return (
+                      <div
+                        key={leave.id || idx}
+                        className="p-4 flex items-start gap-4 hover:bg-slate-50/40 dark:hover:bg-slate-800/10 transition-colors"
+                      >
+                        {/* Left Column: Avatar + Action Icons */}
+                        <div className="flex flex-col items-center shrink-0">
+                          <div className="w-10 h-10 rounded-full bg-slate-50 dark:bg-slate-950 flex items-center justify-center border border-slate-100/50 dark:border-slate-800 overflow-hidden mt-0.5">
+                            <img 
+                              src={idx % 2 === 0 ? '/1.png' : '/2.png'} 
+                              alt={leave.typeNameVisible} 
+                              className="w-8 h-8 object-contain" 
+                            />
                           </div>
-                        )}
-                      </div>
 
-                      {/* Details */}
-                      <div className="flex-1 flex flex-col gap-1.5">
-                        <div className="flex justify-between items-start">
-                          <span className="text-sm font-extrabold text-slate-800 dark:text-slate-200">
-                            {leave.typeNameVisible}
-                          </span>
-                          <span className={`px-2 py-0.5 rounded-lg text-[9px] font-bold uppercase tracking-wider border ${getStatusColor(status)}`}>
-                            {status}
-                          </span>
+                          {/* Actions for Pending Leaves on extreme left */}
+                          {isPending && (
+                            <div className="flex items-center justify-center gap-1 mt-2.5">
+                              <button
+                                type="button"
+                                title="Edit Leave"
+                                onClick={() => handleOpenEdit(leave)}
+                                className="p-1.5 text-amber-500 hover:text-amber-600 dark:text-amber-400 dark:hover:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/50 rounded-lg transition-colors cursor-pointer"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                title="Cancel Leave"
+                                onClick={() => handleDeleteLeave(leave)}
+                                disabled={deletingId === leave.id}
+                                className="p-1.5 text-rose-500 hover:text-rose-600 dark:text-rose-400 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+                              >
+                                {deletingId === leave.id ? (
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin text-rose-500" />
+                                ) : (
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                )}
+                              </button>
+                            </div>
+                          )}
                         </div>
 
-                        <div className="flex justify-between items-center text-xs text-slate-400 dark:text-slate-500 font-medium">
-                          <span>{formatDateDisplay(leave.start_date, leave.end_date)}</span>
-                          <span className="font-bold text-slate-500 dark:text-slate-400">
-                            {totalDays % 1 === 0 ? totalDays.toString() : totalDays.toFixed(1)} {totalDays === 1 ? 'Day' : 'Days'}
-                          </span>
+                        {/* Details */}
+                        <div className="flex-1 flex flex-col gap-1.5">
+                          <div className="flex justify-between items-start">
+                            <span className="text-sm font-extrabold text-slate-800 dark:text-slate-200">
+                              {leave.typeNameVisible}
+                            </span>
+                            <span className={`px-2 py-0.5 rounded-lg text-[9px] font-bold uppercase tracking-wider border ${getStatusColor(status)}`}>
+                              {status}
+                            </span>
+                          </div>
+
+                          <div className="flex justify-between items-center text-xs text-slate-400 dark:text-slate-500 font-medium">
+                            <span>{formatDateDisplay(leave.start_date, leave.end_date)}</span>
+                            <span className="font-bold text-slate-500 dark:text-slate-400">
+                              {totalDays % 1 === 0 ? totalDays.toString() : totalDays.toFixed(1)} {totalDays === 1 ? 'Day' : 'Days'}
+                            </span>
+                          </div>
+
+                          {leave.reason && (
+                            <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 italic bg-slate-50/50 dark:bg-slate-950/30 p-2 rounded-xl border border-slate-100/50 dark:border-slate-800/40">
+                              "{leave.reason}"
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )
+            ) : (
+              compOffRequests.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-slate-400 bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800/60 shadow-sm">
+                  <Clock className="w-10 h-10 stroke-[1.5] text-slate-300 dark:text-slate-700" />
+                  <h3 className="text-xs font-bold text-slate-500 mt-2">No comp off requests</h3>
+                </div>
+              ) : (
+                <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800/80 overflow-hidden shadow-sm divide-y divide-slate-100 dark:divide-slate-800/80">
+                  {compOffRequests.map((req, idx) => {
+                    const status = req.status || 'Pending';
+                    const days = parseFloat((req.days || 1).toString());
+                    const isPending = status.toLowerCase().trim() === 'pending';
+                    const typeName = req.leave_type?.type_name || 'Earned/ Comp Off';
+
+                    return (
+                      <div
+                        key={req.id || idx}
+                        className="p-4 flex items-start gap-4 hover:bg-slate-50/40 dark:hover:bg-slate-800/10 transition-colors"
+                      >
+                        {/* Left Column: Avatar + Action Icons */}
+                        <div className="flex flex-col items-center shrink-0">
+                          <div className="w-10 h-10 rounded-full bg-slate-50 dark:bg-slate-950 flex items-center justify-center border border-slate-100/50 dark:border-slate-800 overflow-hidden mt-0.5">
+                            <Clock className="w-5 h-5 text-primary" />
+                          </div>
+
+                          {/* Actions for Pending Requests */}
+                          {isPending && (
+                            <div className="flex items-center justify-center gap-1 mt-2.5">
+                              <button
+                                type="button"
+                                title="Cancel Request"
+                                onClick={() => handleDeleteCompOff(req.id)}
+                                disabled={deletingCompOffId === req.id}
+                                className="p-1.5 text-rose-500 hover:text-rose-600 dark:text-rose-400 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+                              >
+                                {deletingCompOffId === req.id ? (
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin text-rose-500" />
+                                ) : (
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                )}
+                              </button>
+                            </div>
+                          )}
                         </div>
 
-                        {leave.reason && (
-                          <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 italic bg-slate-50/50 dark:bg-slate-950/30 p-2 rounded-xl border border-slate-100/50 dark:border-slate-800/40">
-                            "{leave.reason}"
-                          </p>
-                        )}
+                        {/* Details */}
+                        <div className="flex-1 flex flex-col gap-1.5">
+                          <div className="flex justify-between items-start">
+                            <span className="text-sm font-extrabold text-slate-800 dark:text-slate-200">
+                              {typeName}
+                            </span>
+                            <div className="flex items-center gap-1.5">
+                              <span className={`px-2 py-0.5 rounded-lg text-[9px] font-bold uppercase tracking-wider border ${getStatusColor(status)}`}>
+                                {status}
+                              </span>
+                              {req.lapsed ? (
+                                <span className="px-2 py-0.5 rounded-lg text-[9px] font-bold uppercase tracking-wider bg-rose-50 text-rose-700 border border-rose-200">
+                                  Lapsed
+                                </span>
+                              ) : null}
+                            </div>
+                          </div>
+
+                          <div className="flex justify-between items-center text-xs text-slate-400 dark:text-slate-500 font-medium">
+                            <span>Worked: {formatDateDisplay(req.date_worked, req.end_date_worked)}</span>
+                            <span className="font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md">
+                              +{days % 1 === 0 ? days.toString() : days.toFixed(1)} {days === 1 ? 'Day' : 'Days'}
+                            </span>
+                          </div>
+
+                          {req.expires_at && status.toLowerCase() === 'approved' && (
+                            <div className="text-[11px] text-slate-400">
+                              Valid Till: <span className="font-semibold text-slate-600 dark:text-slate-300">{formatDateDisplay(req.expires_at)}</span>
+                            </div>
+                          )}
+
+                          {req.reason && (
+                            <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 italic bg-slate-50/50 dark:bg-slate-950/30 p-2 rounded-xl border border-slate-100/50 dark:border-slate-800/40">
+                              "{req.reason}"
+                            </p>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              )
             )}
           </div>
-
-
 
         </div>
       )}

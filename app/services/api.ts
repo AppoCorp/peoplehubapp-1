@@ -46,10 +46,31 @@ export interface LeaveRecord {
 export interface LeaveType {
   id: number;
   type_name: string;
+  leavetype?: string;
   quota_leaves: string;
   used_leaves: string;
   color?: string;
   monthly_limit?: string;
+  comp_off_expiry_after?: number | null;
+  comp_off_expiry_type?: string | null;
+}
+
+export interface CompOffRecord {
+  id: number;
+  user_id: number;
+  leave_type_id: number;
+  date_worked: string;
+  end_date_worked?: string | null;
+  days: number | string;
+  reason: string;
+  file?: string | null;
+  file_url?: string | null;
+  status: string;
+  approved_by?: number | null;
+  approved_at?: string | null;
+  expires_at?: string | null;
+  lapsed?: number;
+  leave_type?: LeaveType;
 }
 
 export interface ExpenseRecord {
@@ -422,6 +443,105 @@ class ApiService {
   ): Promise<any> {
     const headers = this.getHeaders(baseUrl, token);
     headers['x-target-path'] = `/api/v1/leave/${leaveId}`;
+
+    const response = await fetch('/api/proxy', {
+      method: 'DELETE',
+      headers,
+    });
+
+    return this.handleResponse(response);
+  }
+
+  public static async getCompOffRequests(baseUrl: string, token: string, userId?: string): Promise<CompOffRecord[]> {
+    const headers = this.getHeaders(baseUrl, token);
+    const filter = userId ? `?user_id=${userId}` : '';
+    headers['x-target-path'] = `/api/v1/comp-off-request${filter}`;
+
+    const response = await fetch('/api/proxy', {
+      method: 'GET',
+      headers,
+    });
+
+    return this.handleResponse(response);
+  }
+
+  public static async createCompOffRequest(
+    baseUrl: string,
+    token: string,
+    userId: string,
+    leaveTypeId: number,
+    duration: 'single' | 'multiple' | 'first_half' | 'second_half',
+    dateWorked: string,
+    reason: string,
+    endDateWorked?: string | null,
+    file?: File | null
+  ): Promise<any> {
+    const headers = this.getHeaders(baseUrl, token);
+    headers['x-target-path'] = '/api/v1/comp-off-request';
+
+    if (file) {
+      const formData = new FormData();
+      formData.append('user_id', userId);
+      formData.append('leave_type_id', leaveTypeId.toString());
+      formData.append('duration', duration);
+      formData.append('reason', reason);
+
+      if (duration === 'multiple') {
+        formData.append('multi_start_date', dateWorked);
+        formData.append('start_date', dateWorked);
+        if (endDateWorked) {
+          formData.append('multi_end_date', endDateWorked);
+          formData.append('end_date', endDateWorked);
+        }
+      } else {
+        formData.append('date_worked', dateWorked);
+      }
+
+      formData.append('file', file, file.name);
+
+      const response = await fetch('/api/proxy', {
+        method: 'POST',
+        headers,
+        body: formData,
+      });
+
+      return this.handleResponse(response);
+    }
+
+    const body: Record<string, any> = {
+      user_id: parseInt(userId, 10) || userId,
+      leave_type_id: leaveTypeId,
+      duration,
+      reason,
+    };
+
+    if (duration === 'multiple') {
+      body.multi_start_date = dateWorked;
+      body.start_date = dateWorked;
+      if (endDateWorked) {
+        body.multi_end_date = endDateWorked;
+        body.end_date = endDateWorked;
+      }
+    } else {
+      body.date_worked = dateWorked;
+    }
+
+    const response = await fetch('/api/proxy', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+    });
+
+    return this.handleResponse(response);
+  }
+
+  public static async deleteCompOffRequest(
+    baseUrl: string,
+    token: string,
+    id: number | string
+  ): Promise<any> {
+    const headers = this.getHeaders(baseUrl, token);
+    headers['x-target-path'] = `/api/v1/comp-off-request/${id}`;
 
     const response = await fetch('/api/proxy', {
       method: 'DELETE',
