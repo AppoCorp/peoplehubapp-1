@@ -39,8 +39,13 @@ export default function LeavesView({ session, onBackToDashboard }: LeavesViewPro
   const [showApplyForm, setShowApplyForm] = useState(false);
   const [showCompOffForm, setShowCompOffForm] = useState(false);
   const [editingLeave, setEditingLeave] = useState<any | null>(null);
-  const [deletingId, setDeletingId] = useState<number | string | null>(null);
-  const [deletingCompOffId, setDeletingCompOffId] = useState<number | string | null>(null);
+  const [deleteModal, setDeleteModal] = useState<{
+    type: 'leave' | 'comp-off';
+    data: any;
+    title: string;
+    description: string;
+  } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
@@ -319,51 +324,56 @@ export default function LeavesView({ session, onBackToDashboard }: LeavesViewPro
     setShowApplyForm(true);
   };
 
-  const handleDeleteLeave = async (leave: any) => {
-    if (!window.confirm('Are you sure you want to cancel this leave request?')) {
-      return;
-    }
-
-    setDeletingId(leave.id);
-    setErrorMsg(null);
-    setSuccessMsg(null);
-
-    try {
-      if (leave.unique_id && Array.isArray(leave.subLeaveIds) && leave.subLeaveIds.length > 0) {
-        for (const subId of leave.subLeaveIds) {
-          await ApiService.deleteLeave(session.baseUrl, session.token, subId);
-        }
-      } else {
-        await ApiService.deleteLeave(session.baseUrl, session.token, leave.id);
-      }
-      setSuccessMsg('Leave request cancelled successfully');
-      await loadData(true);
-    } catch (err: any) {
-      console.error(err);
-      setErrorMsg(err.message || 'Failed to cancel leave request');
-    } finally {
-      setDeletingId(null);
-    }
+  const handleOpenDeleteLeave = (leave: any) => {
+    const dates = formatDateDisplay(leave.start_date, leave.end_date);
+    setDeleteModal({
+      type: 'leave',
+      data: leave,
+      title: 'Cancel Leave Request',
+      description: `Are you sure you want to cancel the leave request for ${leave.typeNameVisible || 'Leave'}${dates ? ` (${dates})` : ''}?`,
+    });
   };
 
-  const handleDeleteCompOff = async (compOffId: number | string) => {
-    if (!window.confirm('Are you sure you want to cancel this comp off request?')) {
-      return;
-    }
+  const handleOpenDeleteCompOff = (req: CompOffRecord) => {
+    const typeName = req.leave_type?.type_name || 'Earned/ Comp Off';
+    const dates = formatDateDisplay(req.date_worked, req.end_date_worked);
+    setDeleteModal({
+      type: 'comp-off',
+      data: req,
+      title: 'Cancel Comp Off Request',
+      description: `Are you sure you want to cancel the comp off request for ${typeName}${dates ? ` (Worked: ${dates})` : ''}?`,
+    });
+  };
 
-    setDeletingCompOffId(compOffId);
+  const handleConfirmDelete = async () => {
+    if (!deleteModal) return;
+    setIsDeleting(true);
     setErrorMsg(null);
     setSuccessMsg(null);
 
     try {
-      await ApiService.deleteCompOffRequest(session.baseUrl, session.token, compOffId);
-      setSuccessMsg('Comp Off request cancelled successfully');
+      if (deleteModal.type === 'leave') {
+        const leave = deleteModal.data;
+        if (leave.unique_id && Array.isArray(leave.subLeaveIds) && leave.subLeaveIds.length > 0) {
+          for (const subId of leave.subLeaveIds) {
+            await ApiService.deleteLeave(session.baseUrl, session.token, subId);
+          }
+        } else {
+          await ApiService.deleteLeave(session.baseUrl, session.token, leave.id);
+        }
+        setSuccessMsg('Leave request cancelled successfully');
+      } else {
+        const compOff = deleteModal.data;
+        await ApiService.deleteCompOffRequest(session.baseUrl, session.token, compOff.id);
+        setSuccessMsg('Comp Off request cancelled successfully');
+      }
+      setDeleteModal(null);
       await loadData(true);
     } catch (err: any) {
       console.error(err);
-      setErrorMsg(err.message || 'Failed to cancel comp off request');
+      setErrorMsg(err.message || 'Failed to cancel request');
     } finally {
-      setDeletingCompOffId(null);
+      setIsDeleting(false);
     }
   };
 
@@ -1075,15 +1085,10 @@ export default function LeavesView({ session, onBackToDashboard }: LeavesViewPro
                               <button
                                 type="button"
                                 title="Cancel Leave"
-                                onClick={() => handleDeleteLeave(leave)}
-                                disabled={deletingId === leave.id}
-                                className="p-1.5 text-rose-500 hover:text-rose-600 dark:text-rose-400 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+                                onClick={() => handleOpenDeleteLeave(leave)}
+                                className="p-1.5 text-rose-500 hover:text-rose-600 dark:text-rose-400 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-lg transition-colors cursor-pointer"
                               >
-                                {deletingId === leave.id ? (
-                                  <Loader2 className="w-3.5 h-3.5 animate-spin text-rose-500" />
-                                ) : (
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                )}
+                                <Trash2 className="w-3.5 h-3.5" />
                               </button>
                             </div>
                           )}
@@ -1149,15 +1154,10 @@ export default function LeavesView({ session, onBackToDashboard }: LeavesViewPro
                               <button
                                 type="button"
                                 title="Cancel Request"
-                                onClick={() => handleDeleteCompOff(req.id)}
-                                disabled={deletingCompOffId === req.id}
-                                className="p-1.5 text-rose-500 hover:text-rose-600 dark:text-rose-400 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+                                onClick={() => handleOpenDeleteCompOff(req)}
+                                className="p-1.5 text-rose-500 hover:text-rose-600 dark:text-rose-400 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-lg transition-colors cursor-pointer"
                               >
-                                {deletingCompOffId === req.id ? (
-                                  <Loader2 className="w-3.5 h-3.5 animate-spin text-rose-500" />
-                                ) : (
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                )}
+                                <Trash2 className="w-3.5 h-3.5" />
                               </button>
                             </div>
                           )}
@@ -1211,6 +1211,60 @@ export default function LeavesView({ session, onBackToDashboard }: LeavesViewPro
         </div>
       )}
 
+      {/* Custom Confirmation Modal for Cancelling Leaves / Comp Offs */}
+      {deleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-3xl p-6 shadow-2xl border border-slate-100 dark:border-slate-800 flex flex-col gap-4 relative animate-in zoom-in-95 duration-200">
+            {/* Header / Icon */}
+            <div className="flex items-start gap-3.5">
+              <div className="w-11 h-11 rounded-2xl bg-rose-50 dark:bg-rose-950/50 flex items-center justify-center text-rose-500 shrink-0 border border-rose-100 dark:border-rose-900/50">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-base font-extrabold text-slate-850 dark:text-slate-100">
+                  {deleteModal.title}
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                  {deleteModal.description}
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/40 rounded-2xl text-[11px] text-amber-800 dark:text-amber-300 font-medium">
+              This action cannot be undone and will cancel your pending request.
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-2.5 mt-1">
+              <button
+                type="button"
+                onClick={() => setDeleteModal(null)}
+                disabled={isDeleting}
+                className="flex-1 py-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold rounded-2xl text-xs transition-colors cursor-pointer disabled:opacity-50"
+              >
+                No, Keep
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                disabled={isDeleting}
+                className="flex-1 py-3 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-2xl text-xs shadow-lg shadow-rose-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Cancelling...</span>
+                  </>
+                ) : (
+                  'Yes, Cancel'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
+
